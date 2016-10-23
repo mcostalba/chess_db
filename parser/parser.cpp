@@ -14,6 +14,7 @@
 #include <windows.h>
 #endif
 
+#include "misc.h"
 #include "position.h"
 
 namespace {
@@ -300,6 +301,8 @@ void process_pgn(const char* fname) {
               << stats.lines << " lines" << std::endl;
 
     unmap(baseAddress, size);
+
+    dbg_print();
 }
 
 }

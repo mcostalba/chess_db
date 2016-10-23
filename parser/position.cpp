@@ -573,13 +573,10 @@ bool Position::gives_check(Move m) const {
 
 Move Position::do_san_move(const string& san, StateInfo* newSt) {
 
-  Move m = san_to_move(san);
+  bool givesCheck;
+  Move m = san_to_move(san, &givesCheck);
   if (!m)
       return MOVE_NONE;
-
-  bool givesCheck =  type_of(m) == NORMAL && !discovered_check_candidates()
-                   ? check_squares(type_of(piece_on(from_sq(m)))) & to_sq(m)
-                   : gives_check(m);
 
   do_move(m, *newSt, givesCheck);
   return m;
@@ -821,20 +818,13 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 }
 
 
-/// Position::move_to_san() takes a legal Move as input and returns its short
-/// algebraic notation representation.
+/// Position::move_is_san() takes a legal Move and a san as input and returns true if equivalent
 
-const string Position::move_to_san(Move m) {
+bool Position::move_is_san(Move m, const std::string& ref, bool *givesCheck) {
 
   const string PieceToChar(" PNBRQK  pnbrqk");
 
-  if (m == MOVE_NONE)
-      return "(none)";
-
-  if (m == MOVE_NULL)
-      return "(null)";
-
-  assert(MoveList<LEGAL>(*this).contains(m));
+  assert(m != MOVE_NONE);
 
   Bitboard others, b;
   string san;
@@ -851,6 +841,9 @@ const string Position::move_to_san(Move m) {
       if (pt != PAWN)
       {
           san = PieceToChar[make_piece(WHITE, pt)]; // Upper case
+
+          if (san[0] != ref[0])
+              return false;
 
           // A disambiguation occurs if we have more then one piece of type 'pt'
           // that can reach 'to' with a legal move.
@@ -876,7 +869,11 @@ const string Position::move_to_san(Move m) {
               san += uci_square(from)[0] + uci_square(from)[1];
       }
       else if (capture(m))
+      {
           san = uci_square(from)[0];
+          if (san[0] != ref[0])
+              return false;
+      }
 
       if (capture(m))
           san += 'x';
@@ -887,7 +884,12 @@ const string Position::move_to_san(Move m) {
           san += string("=") + PieceToChar[make_piece(WHITE, promotion_type(m))];
   }
 
-  if (gives_check(m))
+  if (san[1] != ref[1] || san[0] != ref[0])
+      return false;
+
+  *givesCheck = gives_check(m);
+
+  if (*givesCheck)
   {
       StateInfo si;
       do_move(m, si, true);
@@ -895,14 +897,14 @@ const string Position::move_to_san(Move m) {
       undo_move(m);
   }
 
-  return san;
+  return san == ref;
 }
 
 
-Move Position::san_to_move(const string& san) {
+Move Position::san_to_move(const string& san, bool* givesCheck) {
 
   for (const ExtMove& m : MoveList<PSEUDO_LEGAL>(*this))
-      if (move_to_san(m) == san && legal(m))
+      if (move_is_san(m, san, givesCheck) && legal(m))
           return m;
 
   return MOVE_NONE;

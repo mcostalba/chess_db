@@ -150,8 +150,8 @@ public:
   uint64_t nodes_searched() const;
   void set_nodes_searched(uint64_t n);
   bool is_draw() const;
-  const std::string move_to_san(Move m);
-  Move san_to_move(const std::string& san);
+  bool move_is_san(Move m, const std::string& ref, bool* givesCheck);
+  Move san_to_move(const std::string& san, bool* givesCheck);
 
   // Position consistency check, for debugging
   bool pos_is_ok(int* failedStep = nullptr) const;
