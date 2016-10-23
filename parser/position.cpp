@@ -822,8 +822,6 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 
 bool Position::move_is_san(Move m, const std::string& ref, bool *givesCheck) {
 
-  const string PieceToChar(" PNBRQK  pnbrqk");
-
   assert(m != MOVE_NONE);
 
   Bitboard others, b;

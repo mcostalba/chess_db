@@ -81,9 +81,9 @@ void unmap(void* baseAddress, uint64_t mapping) {
 }
 
 struct Stats {
-    int games;
-    int moves;
-    int lines;
+    int64_t games;
+    int64_t moves;
+    int64_t lines;
 };
 
 enum States {
@@ -98,9 +98,9 @@ enum Tokens {
 
 Tokens CharToToken[256];
 
-void error(const std::string& desc, int lineNumber, uint8_t* data) {
+void error(const std::string& desc, int64_t lineNumber, const char* data) {
 
-    std::string what = std::string((const char*)(data), 10);
+    std::string what = std::string(data, 10);
     std::cerr << desc << " at line: " << lineNumber << ", '" << what << "' " << std::endl;
     exit(0);
 }
@@ -112,19 +112,19 @@ bool parse_move(Position& pos, const char* san) {
     return m != MOVE_NONE;
 }
 
-void parse_pgn(uint8_t* data, uint64_t size, Stats& stats) {
+void parse_pgn(char* data, uint64_t size, Stats& stats) {
 
     Position pos = RootPos;
     int state = HEADER, prevState = HEADER;
     char buf[10] = {};
     char* san = buf;
-    int lineCnt = 1;
-    int moveCnt = 0, gameCnt = 0;
-    uint8_t* end = data + size;
+    int64_t lineCnt = 1;
+    int64_t moveCnt = 0, gameCnt = 0;
+    char* end = data + size;
 
     for (  ; data < end; ++data)
     {
-        Tokens tk = CharToToken[*data];
+        Tokens tk = CharToToken[*(uint8_t*)data];
 
         if (tk == T_LF)
             lineCnt++;
@@ -240,7 +240,6 @@ void parse_pgn(uint8_t* data, uint64_t size, Stats& stats) {
                 state = HEADER;
                 pos = RootPos;
                 CurSt = States + 1;
-//                std::cerr << "\n\nNew game\n\n" << std::endl;
             }
             break;
 
@@ -288,21 +287,26 @@ void process_pgn(const char* fname) {
 
     void* baseAddress;
     uint64_t size;
-    uint8_t* data = map(fname, &baseAddress, &size);
+    char* data = (char*)map(fname, &baseAddress, &size);
 
     std::cerr << "Mapped " << std::string(fname)
-              << "\nSize: " << size << std::endl;
+              << "\nSize: " << size << " bytes" << std::endl;
+
+    TimePoint elapsed = now();
 
     Stats stats;
     parse_pgn(data, size, stats);
 
-    std::cerr << "Parsed " << stats.games << " games, "
-              << stats.moves << " moves, "
-              << stats.lines << " lines" << std::endl;
+    elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
+
+    std::cerr << "\nElpased time: " << elapsed << "ms"
+              << "\nGames: " << stats.games
+              << "\nMoves: " << stats.moves
+              << "\nLines: " << stats.lines
+              << "\nGames/second: " << 1000 * stats.games / elapsed
+              << "\nMoves/second: " << 1000 * stats.moves / elapsed << std::endl;
 
     unmap(baseAddress, size);
-
-    dbg_print();
 }
 
 }
