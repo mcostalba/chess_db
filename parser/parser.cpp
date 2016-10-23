@@ -80,6 +80,14 @@ void unmap(void* baseAddress, uint64_t mapping) {
 #endif
 }
 
+struct KeyTableType {
+    Key posKey;
+    Key pgnKey;
+};
+
+KeyTableType* KeyTable;
+const int MaxTableSize = 1024 * 1024;
+
 struct Stats {
     int64_t games;
     int64_t moves;
@@ -105,10 +113,18 @@ void error(const std::string& desc, int64_t lineNumber, const char* data) {
     exit(0);
 }
 
-bool parse_move(Position& pos, const char* san) {
+bool parse_move(Position& pos, const char* san, KeyTableType** kt) {
 
     Move m = pos.do_san_move(san, CurSt++);
-//    std::cerr << san << " key: " << pos.key() << " fen: " << pos.fen() << std::endl;
+    if (m)
+    {
+        (*kt)->posKey = pos.key();
+        if (++(*kt) - KeyTable >=  MaxTableSize)
+        {
+            std::cerr << "Table full!" << std::endl;
+            *kt = KeyTable;
+        }
+    }
     return m != MOVE_NONE;
 }
 
@@ -120,6 +136,7 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
     char* san = buf;
     int64_t lineCnt = 1;
     int64_t moveCnt = 0, gameCnt = 0;
+    KeyTableType* kt = KeyTable;
     char* end = data + size;
 
     for (  ; data < end; ++data)
@@ -190,7 +207,7 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
             {
                 state = BLACK_MOVE;
                 *san = 0;   // Zero-terminating string
-                if (!parse_move(pos, buf))
+                if (!parse_move(pos, buf, &kt))
                     error("Illegal white move", lineCnt, data);
                 moveCnt++;
                 san = buf;
@@ -216,7 +233,7 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
             {
                 state = NEW_MOVE;
                 *san = 0;   // Zero-terminating string
-                if (!parse_move(pos, buf))
+                if (!parse_move(pos, buf, &kt))
                     error("Illegal black move", lineCnt, data);
                 moveCnt++;
                 san = buf;
@@ -289,6 +306,8 @@ void process_pgn(const char* fname) {
     uint64_t size;
     char* data = (char*)map(fname, &baseAddress, &size);
 
+    KeyTable = new(KeyTableType[MaxTableSize]);
+
     std::cerr << "Mapped " << std::string(fname)
               << "\nSize: " << size << " bytes" << std::endl;
 
@@ -306,6 +325,7 @@ void process_pgn(const char* fname) {
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed << std::endl;
 
+    delete [] KeyTable;
     unmap(baseAddress, size);
 }
 

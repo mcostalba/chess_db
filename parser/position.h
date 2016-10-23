@@ -147,8 +147,6 @@ public:
   Phase game_phase() const;
   int game_ply() const;
   bool is_chess960() const;
-  uint64_t nodes_searched() const;
-  void set_nodes_searched(uint64_t n);
   bool is_draw() const;
   bool move_is_san(Move m, const std::string& ref, bool* givesCheck);
   Move san_to_move(const std::string& san, bool* givesCheck);
@@ -180,7 +178,6 @@ private:
   int castlingRightsMask[SQUARE_NB];
   Square castlingRookSquare[CASTLING_RIGHT_NB];
   Bitboard castlingPath[CASTLING_RIGHT_NB];
-  uint64_t nodes;
   int gamePly;
   Color sideToMove;
   StateInfo* st;
@@ -321,14 +318,6 @@ inline Key Position::material_key() const {
 
 inline int Position::game_ply() const {
   return gamePly;
-}
-
-inline uint64_t Position::nodes_searched() const {
-  return nodes;
-}
-
-inline void Position::set_nodes_searched(uint64_t n) {
-  nodes = n;
 }
 
 inline bool Position::opposite_bishops() const {
