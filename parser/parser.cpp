@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -85,13 +86,29 @@ struct KeyTableType {
     Key pgnKey;
 };
 
+inline bool operator<(const KeyTableType& f, const KeyTableType& s) {
+    return f.posKey < s.posKey;
+}
+
 KeyTableType* KeyTable;
-const int MaxTableSize = 1024 * 1024;
+const int MaxKeyTableSize = 1024 * 1024;
+
+struct PgnTableType {
+    Key pgnKey;
+    uint64_t ofs;
+    int file_id;
+};
+
+inline bool operator<(const PgnTableType& f, const PgnTableType& s) {
+    return f.pgnKey < s.pgnKey;
+}
+
+PgnTableType* PgnTable;
+const int MaxPgnTableSize = 1024 * 1024;
 
 struct Stats {
     int64_t games;
     int64_t moves;
-    int64_t lines;
 };
 
 enum States {
@@ -105,74 +122,66 @@ enum Tokens {
 
 
 Tokens CharToToken[256];
+void* BaseAddress;
 
-void error(const std::string& desc, int64_t lineNumber, const char* data) {
+void error(const std::string& desc, const char* data) {
 
     std::string what = std::string(data, 10);
-    std::cerr << desc << " at line: " << lineNumber << ", '" << what << "' " << std::endl;
+    std::cerr << desc << ": " << what << "' " << std::endl;
     exit(0);
 }
 
-bool parse_move(Position& pos, const char* san, KeyTableType** kt) {
-
-    Move m = pos.do_san_move(san, CurSt++);
-    if (m)
-    {
-        (*kt)->posKey = pos.key();
-        if (++(*kt) - KeyTable >=  MaxTableSize)
-        {
-            std::cerr << "Table full!" << std::endl;
-            *kt = KeyTable;
-        }
-    }
-    return m != MOVE_NONE;
-}
-
-void parse_game(const char* moves, const char* end, KeyTableType** kt) {
+Key parse_game(const char* moves, const char* end, KeyTableType** kt) {
 
     Position pos = RootPos;
-    const char* cur = moves;
     KeyTableType* curKt = *kt;
+    const char* cur = moves;
 
     while (cur < end)
     {
-        if (!parse_move(pos, cur, kt))
-            error("Illegal move", 0, cur);
+        if (!pos.do_san_move(cur, CurSt++))
+            error("Illegal move", cur);
+
+        (*kt)->posKey = pos.key();
+        ++(*kt);
 
         while (*cur++) {} // Go to next move
     }
 
-    Key pgnKey = pos.pawn_key();
+    Key pgnKey = pos.pgn_key();
     for ( ; curKt < *kt; ++curKt)
         curKt->pgnKey = pgnKey;
 
     CurSt = States + 1;
+    return pgnKey;
 }
 
 void parse_pgn(char* data, uint64_t size, Stats& stats) {
 
     KeyTableType* kt = KeyTable;
+    PgnTableType* pt = PgnTable;
+
     int state = HEADER, prevState = HEADER;
     char moves[1024 * 8] = {};
     char* curMove = moves;
     char* end = curMove;
-    int64_t lineCnt = 1;
-    int64_t moveCnt = 0, gameCnt = 0;
+    size_t moveCnt = 0, gameCnt = 0;
     char* eof = data + size;
 
     for (  ; data < eof; ++data)
     {
         Tokens tk = CharToToken[*(uint8_t*)data];
 
-        if (tk == T_LF)
-            lineCnt++;
-
         switch (state)
         {
         case HEADER:
             if (tk == T_OPEN_BRACKET)
+            {
                 state = BRACKET;
 
+                if (!pt->ofs)
+                    pt->ofs = size_t(data - (char*)BaseAddress);
+            }
             else if (tk == T_DIGIT)
                 state = NEW_MOVE;
 
@@ -182,7 +191,7 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
                 state = COMMENT;
             }
             else if (tk != T_LF && tk != T_SPACE)
-                error("Wrong header", lineCnt, data);
+                error("Wrong header", data);
             break;
 
         case BRACKET:
@@ -214,7 +223,7 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
                 state = COMMENT;
             }
             else
-                error("Wrong new move", lineCnt, data);
+                error("Wrong new move", data);
             break;
 
         case WHITE_MOVE:
@@ -238,7 +247,7 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
                 state = COMMENT;
             }
             else
-                error("Wrong white move", lineCnt, data);
+                error("Wrong white move", data);
             break;
 
         case BLACK_MOVE:
@@ -264,16 +273,27 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
                 state = COMMENT;
             }
             else
-                error("Wrong black move", lineCnt, data);
+                error("Wrong black move", data);
             break;
 
         case RESULT:
             if (tk == T_LF)
             {
-                parse_game(moves, end, &kt);
+                pt->pgnKey = parse_game(moves, end, &kt);
+                pt++;
                 gameCnt++;
                 state = HEADER;
                 end = curMove = moves;
+
+                if (kt - KeyTable >= MaxKeyTableSize - 1024)
+                {
+                    int64_t done = int64_t(data - (char*)BaseAddress) * 100 / size;
+                    std::cerr << "Parsed " << done
+                              << "%, sorting " << int(kt - KeyTable) << " positions...";
+                    std::sort(KeyTable, kt);
+                    std::cerr << "done" << std::endl;
+                    kt = KeyTable;
+                }
             }
             break;
 
@@ -282,9 +302,15 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
         }
     }
 
+    int64_t done = int64_t(data - (char*)BaseAddress) * 100 / size;
+    std::cerr << "Parsed " << done
+              << "%, sorting " << int(kt - KeyTable) << " positions...";
+    std::sort(PgnTable, pt);
+    std::sort(KeyTable, kt);
+    std::cerr << "done." << std::endl;
+
     stats.games = gameCnt;
     stats.moves = moveCnt;
-    stats.lines = lineCnt;
 }
 
 } // namespace
@@ -319,11 +345,11 @@ void init() {
 
 void process_pgn(const char* fname) {
 
-    void* baseAddress;
     uint64_t size;
-    char* data = (char*)map(fname, &baseAddress, &size);
+    char* data = (char*)map(fname, &BaseAddress, &size);
 
-    KeyTable = new(KeyTableType[MaxTableSize]);
+    KeyTable = new(KeyTableType[MaxKeyTableSize]);
+    PgnTable = new(PgnTableType[MaxPgnTableSize]);
 
     std::cerr << "Mapped " << std::string(fname)
               << "\nSize: " << size << " bytes" << std::endl;
@@ -338,12 +364,12 @@ void process_pgn(const char* fname) {
     std::cerr << "\nElpased time: " << elapsed << "ms"
               << "\nGames: " << stats.games
               << "\nMoves: " << stats.moves
-              << "\nLines: " << stats.lines
               << "\nGames/second: " << 1000 * stats.games / elapsed
-              << "\nMoves/second: " << 1000 * stats.moves / elapsed << std::endl;
+              << "\nMoves/second: " << 1000 * stats.moves / elapsed
+              << "\nMBytes/second: " << float(size) / elapsed / 1000 << std::endl;
 
     delete [] KeyTable;
-    unmap(baseAddress, size);
+    unmap(BaseAddress, size);
 }
 
 }
