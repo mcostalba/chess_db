@@ -128,18 +128,39 @@ bool parse_move(Position& pos, const char* san, KeyTableType** kt) {
     return m != MOVE_NONE;
 }
 
-void parse_pgn(char* data, uint64_t size, Stats& stats) {
+void parse_game(const char* moves, const char* end, KeyTableType** kt) {
 
     Position pos = RootPos;
+    const char* cur = moves;
+    KeyTableType* curKt = *kt;
+
+    while (cur < end)
+    {
+        if (!parse_move(pos, cur, kt))
+            error("Illegal move", 0, cur);
+
+        while (*cur++) {} // Go to next move
+    }
+
+    Key pgnKey = pos.pawn_key();
+    for ( ; curKt < *kt; ++curKt)
+        curKt->pgnKey = pgnKey;
+
+    CurSt = States + 1;
+}
+
+void parse_pgn(char* data, uint64_t size, Stats& stats) {
+
+    KeyTableType* kt = KeyTable;
     int state = HEADER, prevState = HEADER;
-    char buf[10] = {};
-    char* san = buf;
+    char moves[1024 * 8] = {};
+    char* curMove = moves;
+    char* end = curMove;
     int64_t lineCnt = 1;
     int64_t moveCnt = 0, gameCnt = 0;
-    KeyTableType* kt = KeyTable;
-    char* end = data + size;
+    char* eof = data + size;
 
-    for (  ; data < end; ++data)
+    for (  ; data < eof; ++data)
     {
         Tokens tk = CharToToken[*(uint8_t*)data];
 
@@ -181,7 +202,7 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
             else if (tk == T_DOT)
                 state = WHITE_MOVE;
 
-            else if (tk == T_SPACE && san == buf)
+            else if (tk == T_SPACE && end == curMove)
                 continue;
 
             else if (tk == T_RESULT || *data == '-')
@@ -197,20 +218,18 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
             break;
 
         case WHITE_MOVE:
-            if (tk == T_MOVE || (tk == T_DIGIT && san != buf))
-                *san++ = *data;
+            if (tk == T_MOVE || (tk == T_DIGIT && end != curMove))
+                *end++ = *data;
 
-            else if (tk == T_SPACE && san == buf)
+            else if (tk == T_SPACE && end == curMove)
                 continue;
 
-            else if (tk == T_SPACE && san != buf)
+            else if (tk == T_SPACE && end != curMove)
             {
                 state = BLACK_MOVE;
-                *san = 0;   // Zero-terminating string
-                if (!parse_move(pos, buf, &kt))
-                    error("Illegal white move", lineCnt, data);
+                *end++ = 0; // Zero-terminating string
+                curMove = end;
                 moveCnt++;
-                san = buf;
             }
 
             else if (tk == T_OPEN_COMMENT)
@@ -223,20 +242,18 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
             break;
 
         case BLACK_MOVE:
-            if (tk == T_MOVE || (tk == T_DIGIT && san != buf))
-                *san++ = *data;
+            if (tk == T_MOVE || (tk == T_DIGIT && end != curMove))
+                *end++ = *data;
 
-            else if (tk == T_SPACE && san == buf)
+            else if (tk == T_SPACE && end == curMove)
                 continue;
 
-            else if (tk == T_SPACE && san != buf)
+            else if (tk == T_SPACE && end != curMove)
             {
                 state = NEW_MOVE;
-                *san = 0;   // Zero-terminating string
-                if (!parse_move(pos, buf, &kt))
-                    error("Illegal black move", lineCnt, data);
+                *end++ = 0; // Zero-terminating string
+                curMove = end;
                 moveCnt++;
-                san = buf;
             }
             else if (tk == T_DIGIT)
                 state = RESULT;
@@ -253,10 +270,10 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
         case RESULT:
             if (tk == T_LF)
             {
+                parse_game(moves, end, &kt);
                 gameCnt++;
                 state = HEADER;
-                pos = RootPos;
-                CurSt = States + 1;
+                end = curMove = moves;
             }
             break;
 

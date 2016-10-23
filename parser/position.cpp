@@ -36,8 +36,11 @@ namespace PSQT {
   extern Score psq[PIECE_NB][SQUARE_NB];
 }
 
+const int PGN_MAX_PLY = 64;
+
 namespace Zobrist {
 
+  Key pgn[PGN_MAX_PLY][SQUARE_NB];
   Key psq[PIECE_NB][SQUARE_NB];
   Key enpassant[FILE_NB];
   Key castling[CASTLING_RIGHT_NB];
@@ -84,6 +87,10 @@ void Position::init() {
   }
 
   Zobrist::side = rng.rand<Key>();
+
+  for (int i = 0; i < PGN_MAX_PLY; ++i)
+      for (Square s = SQ_A1; s <= SQ_H8; ++s)
+          Zobrist::pgn[i][s] = rng.rand<Key>();
 }
 
 
@@ -267,7 +274,7 @@ void Position::set_check_info(StateInfo* si) const {
 
 void Position::set_state(StateInfo* si) const {
 
-  si->key = si->pawnKey = si->materialKey = 0;
+  si->key = si->pawnKey = si->materialKey = si->pgnKey = 0;
   si->checkersBB = attackers_to(square<KING>(sideToMove)) & pieces(~sideToMove);
 
   set_check_info(si);
@@ -286,6 +293,7 @@ void Position::set_state(StateInfo* si) const {
       si->key ^= Zobrist::side;
 
   si->key ^= Zobrist::castling[si->castlingRights];
+  si->pgnKey = si->key;
 
   for (Bitboard b = pieces(PAWN); b; )
   {
@@ -611,6 +619,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   assert(color_of(pc) == us);
   assert(captured == NO_PIECE || color_of(captured) == (type_of(m) != CASTLING ? them : us));
   assert(type_of(captured) != KING);
+
+  // Build pgn key, as an unique sequence of moves
+  const Key* pgn = Zobrist::pgn[gamePly / PGN_MAX_PLY];
+  st->pgnKey ^= pgn[from] ^ pgn[to];
 
   if (type_of(m) == CASTLING)
   {

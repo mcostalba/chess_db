@@ -46,6 +46,7 @@ struct StateInfo {
 
   // Not copied when making a move (will be recomputed anyhow)
   Key        key;
+  Key        pgnKey;
   Bitboard   checkersBB;
   Piece      capturedPiece;
   StateInfo* previous;
@@ -138,7 +139,7 @@ public:
 
   // Accessing hash keys
   Key key() const;
-  Key key_after(Move m) const;
+  Key pgn_key() const;
   Key material_key() const;
   Key pawn_key() const;
 
@@ -306,6 +307,10 @@ inline bool Position::advanced_pawn_push(Move m) const {
 
 inline Key Position::key() const {
   return st->key;
+}
+
+inline Key Position::pgn_key() const {
+  return st->pgnKey;
 }
 
 inline Key Position::pawn_key() const {
