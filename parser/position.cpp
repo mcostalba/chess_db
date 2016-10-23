@@ -921,10 +921,9 @@ const string Position::move_to_san(Move m) {
 
 Move Position::san_to_move(const string& san) {
 
-  for (const auto& m : MoveList<LEGAL>(*this))
-      if (move_to_san(m) == san)
+  for (const ExtMove& m : MoveList<PSEUDO_LEGAL>(*this))
+      if (move_to_san(m) == san && legal(m))
           return m;
 
   return MOVE_NONE;
 }
-

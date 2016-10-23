@@ -418,3 +418,13 @@ ExtMove* generate<LEGAL>(const Position& pos, ExtMove* moveList) {
 
   return moveList;
 }
+
+
+/// generate<PSEUDO_LEGAL> generates all the legal moves in the given position
+
+template<>
+ExtMove* generate<PSEUDO_LEGAL>(const Position& pos, ExtMove* moveList) {
+
+  return pos.checkers() ? generate<EVASIONS    >(pos, moveList)
+                        : generate<NON_EVASIONS>(pos, moveList);
+}
