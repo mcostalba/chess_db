@@ -579,7 +579,7 @@ bool Position::gives_check(Move m) const {
 /// to a StateInfo object. The move is assumed to be legal. Pseudo-legal
 /// moves should be filtered out before this function is called.
 
-Move Position::do_san_move(const string& san, StateInfo* newSt) {
+Move Position::do_san_move(const char* san, StateInfo* newSt) {
 
   bool givesCheck;
   Move m = san_to_move(san, &givesCheck);
@@ -831,7 +831,7 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 
 /// Position::move_is_san() takes a legal Move and a san as input and returns true if equivalent
 
-bool Position::move_is_san(Move m, const std::string& ref, bool *givesCheck) {
+bool Position::move_is_san(Move m, const char* ref, bool *givesCheck) {
 
   assert(m != MOVE_NONE);
 
@@ -910,7 +910,7 @@ bool Position::move_is_san(Move m, const std::string& ref, bool *givesCheck) {
 }
 
 
-Move Position::san_to_move(const string& san, bool* givesCheck) {
+Move Position::san_to_move(const char* san, bool* givesCheck) {
 
   for (const ExtMove& m : MoveList<PSEUDO_LEGAL>(*this))
       if (move_is_san(m, san, givesCheck) && legal(m))

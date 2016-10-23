@@ -337,11 +337,19 @@ void process_pgn(const char* fname) {
     KeyTable = new KeyTableType [1];
     PgnTable = new PgnTableType[1];
 
+    std::cerr << "\nAnalizing...";
+
+    TimePoint elapsed = now();
+
     Stats stats;
     parse_pgn(data, size, stats, true);  // Dry run to get file stats
 
-    std::cerr << "Games: " << stats.games
+    elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
+
+    std::cerr << "done.\n"
+              << "\nGames: " << stats.games
               << "\nMoves: " << stats.moves
+              << "\nElpased time (ms): " << elapsed
               << "\n\nProcessing...";
 
     delete [] KeyTable;
@@ -349,7 +357,7 @@ void process_pgn(const char* fname) {
     KeyTable = new KeyTableType [stats.moves * 5 / 4];
     PgnTable = new PgnTableType[stats.games * 5 / 4];
 
-    TimePoint elapsed = now();
+    elapsed = now();
     parse_pgn(data, size, stats, false);
     elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
 
@@ -361,12 +369,12 @@ void process_pgn(const char* fname) {
     float ks = float(stats.moves * sizeof(KeyTableType)) / 1024 / 1024;
     float ps = float(stats.games * sizeof(PgnTableType)) / 1024 / 1024;
 
-    std::cerr << "\nElpased time (ms): " << elapsed
-              << "\nSize of positions index (MB): " << ks
+    std::cerr << "\nSize of positions index (MB): " << ks
               << "\nSize of games index (MB): " << ps
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed
-              << "\nMBytes/second: " << float(size) / elapsed / 1000 << std::endl;
+              << "\nMBytes/second: " << float(size) / elapsed / 1000
+              << "\nElpased time (ms): " << elapsed << std::endl;
 
     delete [] KeyTable;
     delete [] PgnTable;

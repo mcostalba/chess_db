@@ -129,7 +129,7 @@ public:
 
   // Doing and undoing moves
   void do_move(Move m, StateInfo& st, bool givesCheck);
-  Move do_san_move(const std::string& san, StateInfo* st);
+  Move do_san_move(const char* san, StateInfo* st);
   void undo_move(Move m);
   void do_null_move(StateInfo& st);
   void undo_null_move();
@@ -149,8 +149,8 @@ public:
   int game_ply() const;
   bool is_chess960() const;
   bool is_draw() const;
-  bool move_is_san(Move m, const std::string& ref, bool* givesCheck);
-  Move san_to_move(const std::string& san, bool* givesCheck);
+  bool move_is_san(Move m, const char* ref, bool* givesCheck);
+  Move san_to_move(const char* san, bool* givesCheck);
 
   // Position consistency check, for debugging
   bool pos_is_ok(int* failedStep = nullptr) const;
