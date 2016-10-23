@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #ifndef _WIN32
 #include <fcntl.h>
@@ -13,10 +14,21 @@
 #include <windows.h>
 #endif
 
+#include "position.h"
 
 namespace {
 
-/// Memory map the file and check it
+// FEN string of the initial position, normal chess
+const char* StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+// A list to keep track of the position states along the setup moves
+StateInfo States[1024];
+StateInfo* CurSt = States;
+
+// At the start of every game a new position is copied form here
+Position RootPos;
+
+// Memory map the file and check it
 uint8_t* map(const char* fname, void** baseAddress, uint64_t* mapping) {
 
 #ifndef _WIN32
@@ -92,9 +104,16 @@ void error(const std::string& desc, int lineNumber, uint8_t* data) {
     exit(0);
 }
 
+bool parse_move(Position& pos, const char* san) {
+
+    Move m = pos.do_san_move(san, CurSt++);
+//    std::cerr << san << " key: " << pos.key() << " fen: " << pos.fen() << std::endl;
+    return m != MOVE_NONE;
+}
 
 void parse_pgn(uint8_t* data, uint64_t size, Stats& stats) {
 
+    Position pos = RootPos;
     int state = HEADER, prevState = HEADER;
     char buf[10] = {};
     char* san = buf;
@@ -169,7 +188,9 @@ void parse_pgn(uint8_t* data, uint64_t size, Stats& stats) {
             else if (tk == T_SPACE && san != buf)
             {
                 state = BLACK_MOVE;
-                *san = 0;   // Zero-terminating string, here white move is parsed!
+                *san = 0;   // Zero-terminating string
+                if (!parse_move(pos, buf))
+                    error("Illegal white move", lineCnt, data);
                 moveCnt++;
                 san = buf;
             }
@@ -180,7 +201,7 @@ void parse_pgn(uint8_t* data, uint64_t size, Stats& stats) {
                 state = COMMENT;
             }
             else
-                error("Wrong white move end", lineCnt, data);
+                error("Wrong white move", lineCnt, data);
             break;
 
         case BLACK_MOVE:
@@ -193,7 +214,9 @@ void parse_pgn(uint8_t* data, uint64_t size, Stats& stats) {
             else if (tk == T_SPACE && san != buf)
             {
                 state = NEW_MOVE;
-                *san = 0;   // Zero-terminating string, here black move is parsed!
+                *san = 0;   // Zero-terminating string
+                if (!parse_move(pos, buf))
+                    error("Illegal black move", lineCnt, data);
                 moveCnt++;
                 san = buf;
             }
@@ -206,7 +229,7 @@ void parse_pgn(uint8_t* data, uint64_t size, Stats& stats) {
                 state = COMMENT;
             }
             else
-                error("Wrong black move end", lineCnt, data);
+                error("Wrong black move", lineCnt, data);
             break;
 
         case RESULT:
@@ -214,6 +237,9 @@ void parse_pgn(uint8_t* data, uint64_t size, Stats& stats) {
             {
                 gameCnt++;
                 state = HEADER;
+                pos = RootPos;
+                CurSt = States + 1;
+//                std::cerr << "\n\nNew game\n\n" << std::endl;
             }
             break;
 
@@ -252,6 +278,8 @@ void init() {
     CharToToken['N'] = CharToToken['B'] = CharToToken['R'] = CharToToken['Q'] =
     CharToToken['K'] = CharToToken['x'] = CharToToken['+'] = CharToToken['#'] =
     CharToToken['='] = CharToToken['O'] = CharToToken['-'] = T_MOVE;
+
+    RootPos.set(StartFEN, false, CurSt++);
 }
 
 

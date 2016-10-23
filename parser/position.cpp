@@ -91,7 +91,7 @@ void Position::init() {
 /// This function is not very robust - make sure that input FENs are correct,
 /// this is assumed to be the responsibility of the GUI.
 
-Position& Position::set(const string& fenStr, bool isChess960, StateInfo* si, Thread* th) {
+Position& Position::set(const string& fenStr, bool isChess960, StateInfo* si) {
 /*
    A FEN string defines a particular position using only the ASCII character set.
 
@@ -207,7 +207,6 @@ Position& Position::set(const string& fenStr, bool isChess960, StateInfo* si, Th
   gamePly = std::max(2 * (gamePly - 1), 0) + (sideToMove == BLACK);
 
   chess960 = isChess960;
-  thisThread = th;
   set_state(st);
 
   assert(pos_is_ok());
@@ -269,8 +268,6 @@ void Position::set_check_info(StateInfo* si) const {
 void Position::set_state(StateInfo* si) const {
 
   si->key = si->pawnKey = si->materialKey = 0;
-  si->nonPawnMaterial[WHITE] = si->nonPawnMaterial[BLACK] = VALUE_ZERO;
-  si->psq = SCORE_ZERO;
   si->checkersBB = attackers_to(square<KING>(sideToMove)) & pieces(~sideToMove);
 
   set_check_info(si);
@@ -280,7 +277,6 @@ void Position::set_state(StateInfo* si) const {
       Square s = pop_lsb(&b);
       Piece pc = piece_on(s);
       si->key ^= Zobrist::psq[pc][s];
-      si->psq += PSQT::psq[pc][s];
   }
 
   if (si->epSquare != SQ_NONE)
@@ -298,35 +294,8 @@ void Position::set_state(StateInfo* si) const {
   }
 
   for (Piece pc : Pieces)
-  {
-      if (type_of(pc) != PAWN && type_of(pc) != KING)
-          si->nonPawnMaterial[color_of(pc)] += pieceCount[pc] * PieceValue[MG][pc];
-
       for (int cnt = 0; cnt < pieceCount[pc]; ++cnt)
           si->materialKey ^= Zobrist::psq[pc][cnt];
-  }
-}
-
-
-/// Position::set() is an overload to initialize the position object with
-/// the given endgame code string like "KBPKN". It is manily an helper to
-/// get the material key out of an endgame code. Position is not playable,
-/// indeed is even not guaranteed to be legal.
-
-Position& Position::set(const string& code, Color c, StateInfo* si) {
-
-  assert(code.length() > 0 && code.length() < 8);
-  assert(code[0] == 'K');
-
-  string sides[] = { code.substr(code.find('K', 1)),      // Weak
-                     code.substr(0, code.find('K', 1)) }; // Strong
-
-  std::transform(sides[c].begin(), sides[c].end(), sides[c].begin(), tolower);
-
-  string fenStr =  sides[0] + char(8 - sides[0].length() + '0') + "/8/8/8/8/8/8/"
-                 + sides[1] + char(8 - sides[1].length() + '0') + " w - - 0 10";
-
-  return set(fenStr, false, si, nullptr);
 }
 
 
@@ -602,6 +571,20 @@ bool Position::gives_check(Move m) const {
 /// to a StateInfo object. The move is assumed to be legal. Pseudo-legal
 /// moves should be filtered out before this function is called.
 
+Move Position::do_san_move(const string& san, StateInfo* newSt) {
+
+  Move m = san_to_move(san);
+  if (!m)
+      return MOVE_NONE;
+
+  bool givesCheck =  type_of(m) == NORMAL && !discovered_check_candidates()
+                   ? check_squares(type_of(piece_on(from_sq(m)))) & to_sq(m)
+                   : gives_check(m);
+
+  do_move(m, *newSt, givesCheck);
+  return m;
+}
+
 void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   assert(is_ok(m));
@@ -621,7 +604,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   // in case of a capture or a pawn move.
   ++gamePly;
   ++st->rule50;
-  ++st->pliesFromNull;
 
   Color us = sideToMove;
   Color them = ~us;
@@ -669,8 +651,6 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
           st->pawnKey ^= Zobrist::psq[captured][capsq];
       }
-      else
-          st->nonPawnMaterial[them] -= PieceValue[MG][captured];
 
       // Update board and piece lists
       remove_piece(captured, capsq);

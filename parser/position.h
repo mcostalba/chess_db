@@ -22,6 +22,7 @@
 #define POSITION_H_INCLUDED
 
 #include <cassert>
+#include <cstring>
 #include <deque>
 #include <memory> // For std::unique_ptr
 #include <string>
@@ -39,11 +40,8 @@ struct StateInfo {
   // Copied when making a move
   Key    pawnKey;
   Key    materialKey;
-  Value  nonPawnMaterial[COLOR_NB];
   int    castlingRights;
   int    rule50;
-  int    pliesFromNull;
-  Score  psq;
   Square epSquare;
 
   // Not copied when making a move (will be recomputed anyhow)
@@ -64,19 +62,20 @@ typedef std::unique_ptr<std::deque<StateInfo>> StateListPtr;
 /// pieces, side to move, hash keys, castling info, etc. Important methods are
 /// do_move() and undo_move(), used by the search to update node info when
 /// traversing the search tree.
-class Thread;
 
 class Position {
 public:
   static void init();
 
   Position() = default;
-  Position(const Position&) = delete;
-  Position& operator=(const Position&) = delete;
+  Position(const Position& pos) { *this = pos; }
+  Position& operator=(const Position& pos) {
+      ::memcpy(this, &pos, sizeof(Position));
+      return *this;
+  }
 
   // FEN string input/output
-  Position& set(const std::string& fenStr, bool isChess960, StateInfo* si, Thread* th);
-  Position& set(const std::string& code, Color c, StateInfo* si);
+  Position& set(const std::string& fenStr, bool isChess960, StateInfo* si);
   const std::string fen() const;
 
   // Position representation
@@ -129,6 +128,7 @@ public:
 
   // Doing and undoing moves
   void do_move(Move m, StateInfo& st, bool givesCheck);
+  Move do_san_move(const std::string& san, StateInfo* st);
   void undo_move(Move m);
   void do_null_move(StateInfo& st);
   void undo_null_move();
@@ -147,13 +147,9 @@ public:
   Phase game_phase() const;
   int game_ply() const;
   bool is_chess960() const;
-  Thread* this_thread() const;
   uint64_t nodes_searched() const;
   void set_nodes_searched(uint64_t n);
   bool is_draw() const;
-  int rule50_count() const;
-  Score psq_score() const;
-  Value non_pawn_material(Color c) const;
   const std::string move_to_san(Move m);
   Move san_to_move(const std::string& san);
 
@@ -187,7 +183,6 @@ private:
   uint64_t nodes;
   int gamePly;
   Color sideToMove;
-  Thread* thisThread;
   StateInfo* st;
   bool chess960;
 };
@@ -324,20 +319,8 @@ inline Key Position::material_key() const {
   return st->materialKey;
 }
 
-inline Score Position::psq_score() const {
-  return st->psq;
-}
-
-inline Value Position::non_pawn_material(Color c) const {
-  return st->nonPawnMaterial[c];
-}
-
 inline int Position::game_ply() const {
   return gamePly;
-}
-
-inline int Position::rule50_count() const {
-  return st->rule50;
 }
 
 inline uint64_t Position::nodes_searched() const {
@@ -371,10 +354,6 @@ inline bool Position::capture(Move m) const {
 
 inline Piece Position::captured_piece() const {
   return st->capturedPiece;
-}
-
-inline Thread* Position::this_thread() const {
-  return thisThread;
 }
 
 inline void Position::put_piece(Piece pc, Square s) {
