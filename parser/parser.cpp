@@ -91,7 +91,6 @@ inline bool operator<(const KeyTableType& f, const KeyTableType& s) {
 }
 
 KeyTableType* KeyTable;
-const int MaxKeyTableSize = 1024 * 1024;
 
 struct PgnTableType {
     Key pgnKey;
@@ -104,7 +103,6 @@ inline bool operator<(const PgnTableType& f, const PgnTableType& s) {
 }
 
 PgnTableType* PgnTable;
-const int MaxPgnTableSize = 1024 * 1024;
 
 struct Stats {
     int64_t games;
@@ -156,7 +154,7 @@ Key parse_game(const char* moves, const char* end, KeyTableType** kt) {
     return pgnKey;
 }
 
-void parse_pgn(char* data, uint64_t size, Stats& stats) {
+void parse_pgn(char* data, uint64_t size, Stats& stats, bool dryRun) {
 
     KeyTableType* kt = KeyTable;
     PgnTableType* pt = PgnTable;
@@ -279,21 +277,14 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
         case RESULT:
             if (tk == T_LF)
             {
-                pt->pgnKey = parse_game(moves, end, &kt);
-                pt++;
+                if (!dryRun)
+                {
+                    pt->pgnKey = parse_game(moves, end, &kt);
+                    pt++;
+                }
                 gameCnt++;
                 state = HEADER;
                 end = curMove = moves;
-
-                if (kt - KeyTable >= MaxKeyTableSize - 1024)
-                {
-                    int64_t done = int64_t(data - (char*)BaseAddress) * 100 / size;
-                    std::cerr << "Parsed " << done
-                              << "%, sorting " << int(kt - KeyTable) << " positions...";
-                    std::sort(KeyTable, kt);
-                    std::cerr << "done" << std::endl;
-                    kt = KeyTable;
-                }
             }
             break;
 
@@ -301,13 +292,6 @@ void parse_pgn(char* data, uint64_t size, Stats& stats) {
             break;
         }
     }
-
-    int64_t done = int64_t(data - (char*)BaseAddress) * 100 / size;
-    std::cerr << "Parsed " << done
-              << "%, sorting " << int(kt - KeyTable) << " positions...";
-    std::sort(PgnTable, pt);
-    std::sort(KeyTable, kt);
-    std::cerr << "done." << std::endl;
 
     stats.games = gameCnt;
     stats.moves = moveCnt;
@@ -348,27 +332,44 @@ void process_pgn(const char* fname) {
     uint64_t size;
     char* data = (char*)map(fname, &BaseAddress, &size);
 
-    KeyTable = new(KeyTableType[MaxKeyTableSize]);
-    PgnTable = new(PgnTableType[MaxPgnTableSize]);
+    std::cerr << "File size (bytes): " << size << std::endl;
 
-    std::cerr << "Mapped " << std::string(fname)
-              << "\nSize: " << size << " bytes" << std::endl;
-
-    TimePoint elapsed = now();
+    KeyTable = new KeyTableType [1];
+    PgnTable = new PgnTableType[1];
 
     Stats stats;
-    parse_pgn(data, size, stats);
+    parse_pgn(data, size, stats, true);  // Dry run to get file stats
 
+    std::cerr << "Games: " << stats.games
+              << "\nMoves: " << stats.moves
+              << "\n\nProcessing...";
+
+    delete [] KeyTable;
+    delete [] PgnTable;
+    KeyTable = new KeyTableType [stats.moves * 5 / 4];
+    PgnTable = new PgnTableType[stats.games * 5 / 4];
+
+    TimePoint elapsed = now();
+    parse_pgn(data, size, stats, false);
     elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
 
-    std::cerr << "\nElpased time: " << elapsed << "ms"
-              << "\nGames: " << stats.games
-              << "\nMoves: " << stats.moves
+    std::cerr << "done.\nSorting...";
+    std::sort(PgnTable, PgnTable + stats.games);
+    std::sort(KeyTable, KeyTable + stats.moves);
+    std::cerr << "done." << std::endl;
+
+    float ks = float(stats.moves * sizeof(KeyTableType)) / 1024 / 1024;
+    float ps = float(stats.games * sizeof(PgnTableType)) / 1024 / 1024;
+
+    std::cerr << "\nElpased time (ms): " << elapsed
+              << "\nSize of positions index (MB): " << ks
+              << "\nSize of games index (MB): " << ps
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed
               << "\nMBytes/second: " << float(size) / elapsed / 1000 << std::endl;
 
     delete [] KeyTable;
+    delete [] PgnTable;
     unmap(BaseAddress, size);
 }
 
