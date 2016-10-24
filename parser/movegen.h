@@ -56,6 +56,9 @@ ExtMove* generate_pawn_moves(const Position& pos, ExtMove* moveList, Bitboard ta
 template<PieceType Pt, bool Checks>
 ExtMove* generate_moves(const Position& pos, ExtMove* moveList, Color us, Bitboard target);
 
+template<Color Us, GenType Type, bool Checks>
+ExtMove* generate_king_moves(const Position& pos, ExtMove* moveList, Bitboard target);
+
 /// The MoveList struct is a simple wrapper around generate(). It sometimes comes
 /// in handy to use this class instead of the low level generate() function.
 template<GenType T>

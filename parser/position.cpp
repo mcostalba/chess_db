@@ -57,12 +57,6 @@ std::string uci_square(Square s) {
   return std::string{ char('a' + file_of(s)), char('1' + rank_of(s)) };
 }
 
-void uci_square(Square s, char* str) {
-  str[0] = char('a' + file_of(s));
-  str[1] = char('1' + rank_of(s));
-}
-
-
 } // namespace
 
 
@@ -584,17 +578,6 @@ bool Position::gives_check(Move m) const {
 /// to a StateInfo object. The move is assumed to be legal. Pseudo-legal
 /// moves should be filtered out before this function is called.
 
-Move Position::do_san_move(const char* san, StateInfo* newSt) {
-
-  bool givesCheck;
-  Move m = san_to_move(san, &givesCheck);
-  if (!m)
-      return MOVE_NONE;
-
-  do_move(m, *newSt, givesCheck);
-  return m;
-}
-
 void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   assert(is_ok(m));
@@ -836,14 +819,12 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 
 /// Position::move_is_san() takes a legal Move and a san as input and returns true if equivalent
 
-bool Position::move_is_san(Move m, const char* ref, bool *givesCheck) {
+bool Position::move_is_san(Move m, const char* ref, bool *givesCheck, bool lastOne) {
 
   assert(m != MOVE_NONE);
 
   Bitboard others, b;
   string san;
-  char str[2];
-  Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = piece_on(from);
@@ -867,7 +848,7 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck) {
 
           // A disambiguation occurs if we have more then one piece of type 'pt'
           // that can reach 'to' with a legal move.
-          others = b = (attacks_from(pc, to) & pieces(us, pt)) ^ from;
+          others = b = (attacks_from(pc, to) & pieces(sideToMove, pt)) ^ from;
 
           while (b)
           {
@@ -880,18 +861,20 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck) {
           { /* Disambiguation is not needed */ }
 
           else if (!(others & file_bb(from)))
-              uci_square(from, str), san += str[0];
+              san += char('a' + file_of(from));
 
           else if (!(others & rank_bb(from)))
-              uci_square(from, str), san += str[1];
+              san += char('1' + rank_of(from));
 
           else
-              assert(false);
+          {
+              san += char('a' + file_of(from));
+              san += char('1' + rank_of(from));
+          }
       }
       else if (capture(m))
       {
-          uci_square(from, str);
-          san = str[0];
+          san = char('a' + file_of(from));
 
           if (san[0] != ref[0])
               return false;
@@ -900,77 +883,89 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck) {
       if (capture(m))
           san += 'x';
 
-      uci_square(to, str);
-      san += str[0];
-      san += str[1];
+      san += char('a' + file_of(to));
+      san += char('1' + rank_of(to));
 
       if (type_of(m) == PROMOTION)
       {
           san += '=';
           san += PieceToChar[make_piece(WHITE, promotion_type(m))];
       }
-  }
 
-  if (san[1] != ref[1] || san[0] != ref[0])
-      return false;
+      if (san[1] != ref[1])
+          return false;
+  }
 
   *givesCheck = gives_check(m);
 
   if (*givesCheck)
   {
-      StateInfo si;
-      do_move(m, si, true);
-      san += MoveList<LEGAL>(*this).size() ? "+" : "#";
-      undo_move(m);
+      if (lastOne)
+      {
+          StateInfo si;
+          do_move(m, si, true);
+          san += MoveList<LEGAL>(*this).size() ? '+' : '#';
+          undo_move(m);
+      }
+      else
+          san += '+'; // Can't be mate if we have more moves
   }
 
   return san == ref;
 }
 
-template<Color Us>
-Move do_san_to_move(Position& pos, const char* san, bool* givesCheck) {
+
+Move Position::san_to_move(const char* san, bool* givesCheck, bool lastOne) {
 
   ExtMove moveList[MAX_MOVES];
   ExtMove* last;
+  Color us = sideToMove;
 
-  if (pos.checkers())
-    last = generate<EVASIONS>(pos, moveList);
+  if (checkers())
+    last = generate<EVASIONS>(*this, moveList);
 
   else
   {
       bool isCapture = strchr(san, 'x');
-      Bitboard target = isCapture ? pos.pieces(~Us) : ~pos.pieces();
+      Bitboard target = isCapture ? pieces(~us) : ~pieces();
 
-      if (san[0] >= 'a' && san[0] <= 'h')
-        last = generate_pawn_moves<Us, NON_EVASIONS>(pos, moveList, ~pos.pieces(Us));
+      switch (san[0]) {
+      case 'N':
+          last = generate_moves<KNIGHT, false>(*this, moveList, us, target);
+          break;
 
-      else if (san[0] == 'N')
-        last = generate_moves<KNIGHT, false>(pos, moveList, Us, target);
+      case 'B':
+          last = generate_moves<BISHOP, false>(*this, moveList, us, target);
+          break;
 
-      else if (san[0] == 'B')
-        last = generate_moves<BISHOP, false>(pos, moveList, Us, target);
+      case 'R':
+          last = generate_moves<ROOK, false>(*this, moveList, us, target);
+          break;
 
-      else if (san[0] == 'R')
-        last = generate_moves<ROOK, false>(pos, moveList, Us, target);
+      case 'Q':
+          last = generate_moves<QUEEN, false>(*this, moveList, us, target);
+          break;
 
-      else if (san[0] == 'Q')
-        last = generate_moves<QUEEN, false>(pos, moveList, Us, target);
+      case 'K':
+      case 'O':
+          last = us == WHITE ? generate_king_moves<WHITE, NON_EVASIONS, false>(*this, moveList, target)
+                             : generate_king_moves<BLACK, NON_EVASIONS, false>(*this, moveList, target);
+          break;
 
-      else
-        last = generate<NON_EVASIONS>(pos, moveList);
+      default:
+          assert(san[0] >= 'a' && san[0] <= 'h');
+          last = us == WHITE ? generate_pawn_moves<WHITE, NON_EVASIONS>(*this, moveList, ~pieces(us))
+                             : generate_pawn_moves<BLACK, NON_EVASIONS>(*this, moveList, ~pieces(us));
+      }
   }
 
   for (ExtMove* m = moveList; m < last; ++m)
-      if (pos.move_is_san(m->move, san, givesCheck) && pos.legal(m->move))
+      if (move_is_san(m->move, san, givesCheck, lastOne) && legal(m->move))
           return m->move;
 
   return MOVE_NONE;
 }
 
-Move Position::san_to_move(const char* san, bool* givesCheck) {
-    return sideToMove == WHITE ? do_san_to_move<WHITE>(*this, san, givesCheck)
-                               : do_san_to_move<BLACK>(*this, san, givesCheck);
-}
 
 /// Position::pos_is_ok() performs some consistency checks for the position object.
 /// This is meant to be helpful when debugging.

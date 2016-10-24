@@ -118,17 +118,21 @@ uint32_t parse_game(const char* moves, const char* end, KeyTableType** kt) {
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
     KeyTableType* curKt = *kt;
-    const char* cur = moves;
+    const char* cur = moves, *next = moves;
 
     while (cur < end)
     {
-        if (!pos.do_san_move(cur, st++))
+        while (*next++) {} // Go to next move
+
+        bool givesCheck;
+        Move move = pos.san_to_move(cur, &givesCheck, next == end);
+        if (!move)
             error("Illegal move", cur);
 
+        pos.do_move(move, *st++, givesCheck);
         (*kt)->posKey = pos.key();
         ++(*kt);
-
-        while (*cur++) {} // Go to next move
+        cur = next;
     }
 
     uint32_t pgnKey = uint32_t(pos.pgn_key());

@@ -257,17 +257,13 @@ namespace {
     return moveList;
   }
 
+  template ExtMove* generate_moves<KNIGHT, false>(const Position&, ExtMove*, Color, Bitboard);
+  template ExtMove* generate_moves<BISHOP, false>(const Position&, ExtMove*, Color, Bitboard);
+  template ExtMove* generate_moves<ROOK,   false>(const Position&, ExtMove*, Color, Bitboard);
+  template ExtMove* generate_moves<QUEEN,  false>(const Position&, ExtMove*, Color, Bitboard);
 
-  template<Color Us, GenType Type>
-  ExtMove* generate_all(const Position& pos, ExtMove* moveList, Bitboard target) {
-
-    const bool Checks = Type == QUIET_CHECKS;
-
-    moveList = generate_pawn_moves<Us, Type>(pos, moveList, target);
-    moveList = generate_moves<KNIGHT, Checks>(pos, moveList, Us, target);
-    moveList = generate_moves<BISHOP, Checks>(pos, moveList, Us, target);
-    moveList = generate_moves<  ROOK, Checks>(pos, moveList, Us, target);
-    moveList = generate_moves< QUEEN, Checks>(pos, moveList, Us, target);
+  template<Color Us, GenType Type, bool Checks>
+  ExtMove* generate_king_moves(const Position& pos, ExtMove* moveList, Bitboard target) {
 
     if (Type != QUIET_CHECKS && Type != EVASIONS)
     {
@@ -291,6 +287,21 @@ namespace {
         }
     }
 
+    return moveList;
+  }
+
+
+  template<Color Us, GenType Type>
+  ExtMove* generate_all(const Position& pos, ExtMove* moveList, Bitboard target) {
+
+    const bool Checks = Type == QUIET_CHECKS;
+
+    moveList = generate_pawn_moves<Us, Type>(pos, moveList, target);
+    moveList = generate_moves<KNIGHT, Checks>(pos, moveList, Us, target);
+    moveList = generate_moves<BISHOP, Checks>(pos, moveList, Us, target);
+    moveList = generate_moves<  ROOK, Checks>(pos, moveList, Us, target);
+    moveList = generate_moves< QUEEN, Checks>(pos, moveList, Us, target);
+    moveList = generate_king_moves<Us, Type, Checks>(pos, moveList, target);
     return moveList;
   }
 
