@@ -20,8 +20,45 @@
 
 namespace {
 
-// Memory map the file and check it
-uint8_t* map(const char* fname, void** baseAddress, uint64_t* mapping) {
+struct __attribute__ ((packed)) KeyTableType {
+    uint64_t posKey;
+    uint32_t pgnKey;
+};
+KeyTableType* KeyTable;
+
+inline bool operator<(const KeyTableType& f, const KeyTableType& s) {
+    return f.posKey < s.posKey;
+}
+
+struct __attribute__ ((packed)) PgnTableType {
+    uint32_t pgnKey;
+    uint64_t ofs;
+    uint32_t file_id;
+};
+PgnTableType* PgnTable;
+
+inline bool operator<(const PgnTableType& f, const PgnTableType& s) {
+    return f.pgnKey < s.pgnKey;
+}
+
+struct Stats {
+    int64_t games;
+    int64_t moves;
+};
+
+enum State {
+    HEADER, BRACKET, COMMENT, NEW_MOVE, WHITE_MOVE, BLACK_MOVE, RESULT
+};
+
+enum Token {
+    T_NONE, T_LF, T_SPACE, T_DOT, T_RESULT, T_DIGIT, T_MOVE, T_OPEN_BRACKET,
+    T_CLOSE_BRACKET, T_OPEN_COMMENT, T_CLOSE_COMMENT
+};
+
+Token CharToToken[256];
+Position RootPos;
+
+void map(const char* fname, void** baseAddress, uint64_t* mapping) {
 
 #ifndef _WIN32
     struct stat statbuf;
@@ -57,7 +94,6 @@ uint8_t* map(const char* fname, void** baseAddress, uint64_t* mapping) {
         exit(1);
     }
 #endif
-    return (uint8_t*)*baseAddress;
 }
 
 void unmap(void* baseAddress, uint64_t mapping) {
@@ -69,45 +105,6 @@ void unmap(void* baseAddress, uint64_t mapping) {
     CloseHandle((HANDLE)mapping);
 #endif
 }
-
-struct __attribute__ ((packed)) KeyTableType {
-    uint64_t posKey;
-    uint32_t pgnKey;
-};
-KeyTableType* KeyTable;
-
-inline bool operator<(const KeyTableType& f, const KeyTableType& s) {
-    return f.posKey < s.posKey;
-}
-
-struct __attribute__ ((packed)) PgnTableType {
-    uint32_t pgnKey;
-    uint64_t ofs;
-    uint32_t file_id;
-};
-PgnTableType* PgnTable;
-
-inline bool operator<(const PgnTableType& f, const PgnTableType& s) {
-    return f.pgnKey < s.pgnKey;
-}
-
-struct Stats {
-    int64_t games;
-    int64_t moves;
-};
-
-enum States {
-    HEADER, BRACKET, COMMENT, NEW_MOVE, WHITE_MOVE, BLACK_MOVE, RESULT
-};
-
-enum Tokens {
-    T_NONE, T_LF, T_SPACE, T_DOT, T_RESULT, T_DIGIT, T_MOVE, T_OPEN_BRACKET,
-    T_CLOSE_BRACKET, T_OPEN_COMMENT, T_CLOSE_COMMENT
-};
-
-Tokens CharToToken[256];
-void* BaseAddress;
-Position RootPos;
 
 void error(const std::string& desc, const char* data) {
 
@@ -141,7 +138,7 @@ uint32_t parse_game(const char* moves, const char* end, KeyTableType** kt) {
     return pgnKey;
 }
 
-void parse_pgn(char* data, uint64_t size, Stats& stats, bool dryRun) {
+void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, bool dryRun) {
 
     KeyTableType* kt = KeyTable;
     PgnTableType* pt = PgnTable;
@@ -151,11 +148,12 @@ void parse_pgn(char* data, uint64_t size, Stats& stats, bool dryRun) {
     char* curMove = moves;
     char* end = curMove;
     size_t moveCnt = 0, gameCnt = 0;
+    char* data = (char*)baseAddress;
     char* eof = data + size;
 
     for (  ; data < eof; ++data)
     {
-        Tokens tk = CharToToken[*(uint8_t*)data];
+        Token tk = CharToToken[*(uint8_t*)data];
 
         switch (state)
         {
@@ -165,7 +163,7 @@ void parse_pgn(char* data, uint64_t size, Stats& stats, bool dryRun) {
                 state = BRACKET;
 
                 if (!pt->ofs)
-                    pt->ofs = size_t(data - (char*)BaseAddress);
+                    pt->ofs = size_t(data - (char*)baseAddress);
             }
             else if (tk == T_DIGIT)
                 state = NEW_MOVE;
@@ -319,7 +317,9 @@ void init() {
 void process_pgn(const char* fname) {
 
     uint64_t size;
-    char* data = (char*)map(fname, &BaseAddress, &size);
+    void* baseAddress;
+
+    map(fname, &baseAddress, &size);
 
     KeyTable = new KeyTableType [1];
     PgnTable = new PgnTableType[1];
@@ -329,7 +329,7 @@ void process_pgn(const char* fname) {
     TimePoint elapsed = now();
 
     Stats stats;
-    parse_pgn(data, size, stats, true);  // Dry run to get file stats
+    parse_pgn(baseAddress, size, stats, true);  // Dry run to get file stats
 
     std::cerr << "done\nProcessing...";
 
@@ -338,7 +338,7 @@ void process_pgn(const char* fname) {
     KeyTable = new KeyTableType [stats.moves * 5 / 4];
     PgnTable = new PgnTableType[stats.games * 5 / 4];
 
-    parse_pgn(data, size, stats, false);
+    parse_pgn(baseAddress, size, stats, false);
 
     std::cerr << "done\nSorting...";
 
@@ -364,18 +364,20 @@ void process_pgn(const char* fname) {
     float ps = float(stats.games * sizeof(PgnTableType)) / 1024 / 1024;
 
     std::cerr << "done\n"
-              << "\nSize of positions index (MB): " << ks
-              << "\nSize of games index (MB): " << ps
+              << "\nGames: " << stats.games
+              << "\nMoves: " << stats.moves
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed
               << "\nMBytes/second: " << float(size) / elapsed / 1000
+              << "\nSize of positions index (MB): " << ks
+              << "\nSize of games index (MB): " << ps
               << "\nPositions index: " << posFile
               << "\nGames index: " << gameFile
               << "\nElpased time (ms): " << elapsed << "\n" << std::endl;
 
     delete [] KeyTable;
     delete [] PgnTable;
-    unmap(BaseAddress, size);
+    unmap(baseAddress, size);
 }
 
 }
