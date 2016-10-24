@@ -1,8 +1,8 @@
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <string>
-#include <vector>
 
 #ifndef _WIN32
 #include <fcntl.h>
@@ -19,16 +19,6 @@
 #include "position.h"
 
 namespace {
-
-// FEN string of the initial position, normal chess
-const char* StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
-// A list to keep track of the position states along the setup moves
-StateInfo States[1024];
-StateInfo* CurSt = States;
-
-// At the start of every game a new position is copied form here
-Position RootPos;
 
 // Memory map the file and check it
 uint8_t* map(const char* fname, void** baseAddress, uint64_t* mapping) {
@@ -70,7 +60,6 @@ uint8_t* map(const char* fname, void** baseAddress, uint64_t* mapping) {
     return (uint8_t*)*baseAddress;
 }
 
-
 void unmap(void* baseAddress, uint64_t mapping) {
 
 #ifndef _WIN32
@@ -81,28 +70,26 @@ void unmap(void* baseAddress, uint64_t mapping) {
 #endif
 }
 
-struct KeyTableType {
-    Key posKey;
-    Key pgnKey;
+struct __attribute__ ((packed)) KeyTableType {
+    uint64_t posKey;
+    uint32_t pgnKey;
 };
+KeyTableType* KeyTable;
 
 inline bool operator<(const KeyTableType& f, const KeyTableType& s) {
     return f.posKey < s.posKey;
 }
 
-KeyTableType* KeyTable;
-
-struct PgnTableType {
-    Key pgnKey;
+struct __attribute__ ((packed)) PgnTableType {
+    uint32_t pgnKey;
     uint64_t ofs;
-    int file_id;
+    uint32_t file_id;
 };
+PgnTableType* PgnTable;
 
 inline bool operator<(const PgnTableType& f, const PgnTableType& s) {
     return f.pgnKey < s.pgnKey;
 }
-
-PgnTableType* PgnTable;
 
 struct Stats {
     int64_t games;
@@ -118,9 +105,9 @@ enum Tokens {
     T_CLOSE_BRACKET, T_OPEN_COMMENT, T_CLOSE_COMMENT
 };
 
-
 Tokens CharToToken[256];
 void* BaseAddress;
+Position RootPos;
 
 void error(const std::string& desc, const char* data) {
 
@@ -129,15 +116,16 @@ void error(const std::string& desc, const char* data) {
     exit(0);
 }
 
-Key parse_game(const char* moves, const char* end, KeyTableType** kt) {
+uint32_t parse_game(const char* moves, const char* end, KeyTableType** kt) {
 
+    StateInfo states[1024], *st = states;
     Position pos = RootPos;
     KeyTableType* curKt = *kt;
     const char* cur = moves;
 
     while (cur < end)
     {
-        if (!pos.do_san_move(cur, CurSt++))
+        if (!pos.do_san_move(cur, st++))
             error("Illegal move", cur);
 
         (*kt)->posKey = pos.key();
@@ -146,11 +134,10 @@ Key parse_game(const char* moves, const char* end, KeyTableType** kt) {
         while (*cur++) {} // Go to next move
     }
 
-    Key pgnKey = pos.pgn_key();
+    uint32_t pgnKey = uint32_t(pos.pgn_key());
     for ( ; curKt < *kt; ++curKt)
         curKt->pgnKey = pgnKey;
 
-    CurSt = States + 1;
     return pgnKey;
 }
 
@@ -304,6 +291,10 @@ namespace Parser {
 
 void init() {
 
+    static StateInfo St;
+    const char* StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    RootPos.set(StartFEN, false, &St);
+
     CharToToken['\n'] = CharToToken['\r'] = T_LF;
     CharToToken[' '] = CharToToken['\t'] = T_SPACE;
     CharToToken['.'] = T_DOT;
@@ -322,8 +313,6 @@ void init() {
     CharToToken['N'] = CharToToken['B'] = CharToToken['R'] = CharToToken['Q'] =
     CharToToken['K'] = CharToToken['x'] = CharToToken['+'] = CharToToken['#'] =
     CharToToken['='] = CharToToken['O'] = CharToToken['-'] = T_MOVE;
-
-    RootPos.set(StartFEN, false, CurSt++);
 }
 
 
@@ -331,8 +320,6 @@ void process_pgn(const char* fname) {
 
     uint64_t size;
     char* data = (char*)map(fname, &BaseAddress, &size);
-
-    std::cerr << "File size (bytes): " << size << std::endl;
 
     KeyTable = new KeyTableType [1];
     PgnTable = new PgnTableType[1];
@@ -344,37 +331,47 @@ void process_pgn(const char* fname) {
     Stats stats;
     parse_pgn(data, size, stats, true);  // Dry run to get file stats
 
-    elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
-
-    std::cerr << "done.\n"
-              << "\nGames: " << stats.games
-              << "\nMoves: " << stats.moves
-              << "\nElpased time (ms): " << elapsed
-              << "\n\nProcessing...";
+    std::cerr << "done\nProcessing...";
 
     delete [] KeyTable;
     delete [] PgnTable;
     KeyTable = new KeyTableType [stats.moves * 5 / 4];
     PgnTable = new PgnTableType[stats.games * 5 / 4];
 
-    elapsed = now();
     parse_pgn(data, size, stats, false);
-    elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
 
-    std::cerr << "done.\nSorting...";
+    std::cerr << "done\nSorting...";
+
     std::sort(PgnTable, PgnTable + stats.games);
     std::sort(KeyTable, KeyTable + stats.moves);
-    std::cerr << "done." << std::endl;
+
+    std::cerr << "done\nWriting to files...";
+
+    std::string posFile = std::string(fname) + ".kidx";
+    std::string gameFile = std::string(fname) + ".gidx";
+
+    auto pFile = fopen(posFile.c_str(), "wb");
+    fwrite(KeyTable, sizeof(KeyTableType), stats.moves, pFile);
+    fclose(pFile);
+
+    pFile = fopen(gameFile.c_str(), "wb");
+    fwrite(PgnTable, sizeof(PgnTableType), stats.games, pFile);
+    fclose(pFile);
+
+    elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
 
     float ks = float(stats.moves * sizeof(KeyTableType)) / 1024 / 1024;
     float ps = float(stats.games * sizeof(PgnTableType)) / 1024 / 1024;
 
-    std::cerr << "\nSize of positions index (MB): " << ks
+    std::cerr << "done\n"
+              << "\nSize of positions index (MB): " << ks
               << "\nSize of games index (MB): " << ps
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed
               << "\nMBytes/second: " << float(size) / elapsed / 1000
-              << "\nElpased time (ms): " << elapsed << std::endl;
+              << "\nPositions index: " << posFile
+              << "\nGames index: " << gameFile
+              << "\nElpased time (ms): " << elapsed << "\n" << std::endl;
 
     delete [] KeyTable;
     delete [] PgnTable;
