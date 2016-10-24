@@ -88,6 +88,7 @@ namespace {
     return moveList;
   }
 
+} // namespace
 
   template<Color Us, GenType Type>
   ExtMove* generate_pawn_moves(const Position& pos, ExtMove* moveList, Bitboard target) {
@@ -224,7 +225,6 @@ namespace {
     return moveList;
   }
 
-
   template<PieceType Pt, bool Checks>
   ExtMove* generate_moves(const Position& pos, ExtMove* moveList, Color us,
                           Bitboard target) {
@@ -293,8 +293,6 @@ namespace {
 
     return moveList;
   }
-
-} // namespace
 
 
 /// generate<CAPTURES> generates all pseudo-legal captures and queen

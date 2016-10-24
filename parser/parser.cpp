@@ -326,8 +326,6 @@ void process_pgn(const char* fname) {
 
     std::cerr << "\nAnalizing...";
 
-    TimePoint elapsed = now();
-
     Stats stats;
     parse_pgn(baseAddress, size, stats, true);  // Dry run to get file stats
 
@@ -338,7 +336,11 @@ void process_pgn(const char* fname) {
     KeyTable = new KeyTableType [stats.moves * 5 / 4];
     PgnTable = new PgnTableType[stats.games * 5 / 4];
 
+    TimePoint elapsed = now();
+
     parse_pgn(baseAddress, size, stats, false);
+
+    elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
 
     std::cerr << "done\nSorting...";
 
@@ -358,8 +360,6 @@ void process_pgn(const char* fname) {
     fwrite(PgnTable, sizeof(PgnTableType), stats.games, pFile);
     fclose(pFile);
 
-    elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
-
     float ks = float(stats.moves * sizeof(KeyTableType)) / 1024 / 1024;
     float ps = float(stats.games * sizeof(PgnTableType)) / 1024 / 1024;
 
@@ -373,7 +373,7 @@ void process_pgn(const char* fname) {
               << "\nSize of games index (MB): " << ps
               << "\nPositions index: " << posFile
               << "\nGames index: " << gameFile
-              << "\nElpased time (ms): " << elapsed << "\n" << std::endl;
+              << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
 
     delete [] KeyTable;
     delete [] PgnTable;

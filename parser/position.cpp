@@ -57,6 +57,11 @@ std::string uci_square(Square s) {
   return std::string{ char('a' + file_of(s)), char('1' + rank_of(s)) };
 }
 
+void uci_square(Square s, char* str) {
+  str[0] = char('a' + file_of(s));
+  str[1] = char('1' + rank_of(s));
+}
+
 
 } // namespace
 
@@ -837,6 +842,7 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck) {
 
   Bitboard others, b;
   string san;
+  char str[2];
   Color us = sideToMove;
   Square from = from_sq(m);
   Square to = to_sq(m);
@@ -844,7 +850,12 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck) {
   PieceType pt = type_of(pc);
 
   if (type_of(m) == CASTLING)
+  {
+      if (ref[0] != 'O')
+        return false;
+
       san = to > from ? "O-O" : "O-O-O";
+  }
   else
   {
       if (pt != PAWN)
@@ -869,17 +880,19 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck) {
           { /* Disambiguation is not needed */ }
 
           else if (!(others & file_bb(from)))
-              san += uci_square(from)[0];
+              uci_square(from, str), san += str[0];
 
           else if (!(others & rank_bb(from)))
-              san += uci_square(from)[1];
+              uci_square(from, str), san += str[1];
 
           else
-              san += uci_square(from)[0] + uci_square(from)[1];
+              assert(false);
       }
       else if (capture(m))
       {
-          san = uci_square(from)[0];
+          uci_square(from, str);
+          san = str[0];
+
           if (san[0] != ref[0])
               return false;
       }
@@ -887,10 +900,15 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck) {
       if (capture(m))
           san += 'x';
 
-      san += uci_square(to);
+      uci_square(to, str);
+      san += str[0];
+      san += str[1];
 
       if (type_of(m) == PROMOTION)
-          san += string("=") + PieceToChar[make_piece(WHITE, promotion_type(m))];
+      {
+          san += '=';
+          san += PieceToChar[make_piece(WHITE, promotion_type(m))];
+      }
   }
 
   if (san[1] != ref[1] || san[0] != ref[0])
@@ -909,12 +927,123 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck) {
   return san == ref;
 }
 
+template<Color Us>
+Move do_san_to_move(Position& pos, const char* san, bool* givesCheck) {
 
-Move Position::san_to_move(const char* san, bool* givesCheck) {
+  ExtMove moveList[MAX_MOVES];
+  ExtMove* last;
 
-  for (const ExtMove& m : MoveList<PSEUDO_LEGAL>(*this))
-      if (move_is_san(m, san, givesCheck) && legal(m))
-          return m;
+  if (pos.checkers())
+    last = generate<EVASIONS>(pos, moveList);
+
+  else
+  {
+      bool isCapture = strchr(san, 'x');
+      Bitboard target = isCapture ? pos.pieces(~Us) : ~pos.pieces();
+
+      if (san[0] >= 'a' && san[0] <= 'h')
+        last = generate_pawn_moves<Us, NON_EVASIONS>(pos, moveList, ~pos.pieces(Us));
+
+      else if (san[0] == 'N')
+        last = generate_moves<KNIGHT, false>(pos, moveList, Us, target);
+
+      else if (san[0] == 'B')
+        last = generate_moves<BISHOP, false>(pos, moveList, Us, target);
+
+      else if (san[0] == 'R')
+        last = generate_moves<ROOK, false>(pos, moveList, Us, target);
+
+      else if (san[0] == 'Q')
+        last = generate_moves<QUEEN, false>(pos, moveList, Us, target);
+
+      else
+        last = generate<NON_EVASIONS>(pos, moveList);
+  }
+
+  for (ExtMove* m = moveList; m < last; ++m)
+      if (pos.move_is_san(m->move, san, givesCheck) && pos.legal(m->move))
+          return m->move;
 
   return MOVE_NONE;
+}
+
+Move Position::san_to_move(const char* san, bool* givesCheck) {
+    return sideToMove == WHITE ? do_san_to_move<WHITE>(*this, san, givesCheck)
+                               : do_san_to_move<BLACK>(*this, san, givesCheck);
+}
+
+/// Position::pos_is_ok() performs some consistency checks for the position object.
+/// This is meant to be helpful when debugging.
+
+bool Position::pos_is_ok(int* failedStep) const {
+
+  const bool Fast = true; // Quick (default) or full check?
+
+  enum { Default, King, Bitboards, State, Lists, Castling };
+
+  for (int step = Default; step <= (Fast ? Default : Castling); step++)
+  {
+      if (failedStep)
+          *failedStep = step;
+
+      if (step == Default)
+          if (   (sideToMove != WHITE && sideToMove != BLACK)
+              || piece_on(square<KING>(WHITE)) != W_KING
+              || piece_on(square<KING>(BLACK)) != B_KING
+              || (   ep_square() != SQ_NONE
+                  && relative_rank(sideToMove, ep_square()) != RANK_6))
+              return false;
+
+      if (step == King)
+          if (   std::count(board, board + SQUARE_NB, W_KING) != 1
+              || std::count(board, board + SQUARE_NB, B_KING) != 1
+              || attackers_to(square<KING>(~sideToMove)) & pieces(sideToMove))
+              return false;
+
+      if (step == Bitboards)
+      {
+          if (  (pieces(WHITE) & pieces(BLACK))
+              ||(pieces(WHITE) | pieces(BLACK)) != pieces())
+              return false;
+
+          for (PieceType p1 = PAWN; p1 <= KING; ++p1)
+              for (PieceType p2 = PAWN; p2 <= KING; ++p2)
+                  if (p1 != p2 && (pieces(p1) & pieces(p2)))
+                      return false;
+      }
+
+      if (step == State)
+      {
+          StateInfo si = *st;
+          set_state(&si);
+          if (std::memcmp(&si, st, sizeof(StateInfo)))
+              return false;
+      }
+
+      if (step == Lists)
+          for (Piece pc : Pieces)
+          {
+              if (pieceCount[pc] != popcount(pieces(color_of(pc), type_of(pc))))
+                  return false;
+
+              for (int i = 0; i < pieceCount[pc]; ++i)
+                  if (board[pieceList[pc][i]] != pc || index[pieceList[pc][i]] != i)
+                      return false;
+          }
+
+      if (step == Castling)
+          for (Color c = WHITE; c <= BLACK; ++c)
+              for (CastlingSide s = KING_SIDE; s <= QUEEN_SIDE; s = CastlingSide(s + 1))
+              {
+                  if (!can_castle(c | s))
+                      continue;
+
+                  if (   piece_on(castlingRookSquare[c | s]) != make_piece(c, ROOK)
+                      || castlingRightsMask[castlingRookSquare[c | s]] != (c | s)
+                      ||(castlingRightsMask[square<KING>(c)] & (c | s)) != (c | s))
+                      return false;
+              }
+  }
+
+  return true;
 }
