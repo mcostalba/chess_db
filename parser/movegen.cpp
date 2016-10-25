@@ -68,11 +68,9 @@ namespace {
   template<GenType Type, Square D>
   ExtMove* make_promotions(ExtMove* moveList, Square to, Square ksq) {
 
-    if (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS)
-        *moveList++ = make<PROMOTION>(to - D, to, QUEEN);
-
-    if (Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS)
+    if (Type != QUIET_CHECKS)
     {
+        *moveList++ = make<PROMOTION>(to - D, to, QUEEN);
         *moveList++ = make<PROMOTION>(to - D, to, ROOK);
         *moveList++ = make<PROMOTION>(to - D, to, BISHOP);
         *moveList++ = make<PROMOTION>(to - D, to, KNIGHT);

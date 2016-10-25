@@ -886,14 +886,14 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck, bool lastO
       san += char('a' + file_of(to));
       san += char('1' + rank_of(to));
 
+      if (san[0] != ref[0] || san[1] != ref[1])
+          return false;
+
       if (type_of(m) == PROMOTION)
       {
           san += '=';
           san += PieceToChar[make_piece(WHITE, promotion_type(m))];
       }
-
-      if (san[1] != ref[1])
-          return false;
   }
 
   *givesCheck = gives_check(m);
@@ -915,6 +915,16 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck, bool lastO
 }
 
 
+// Reduce target to destination square only. It is harmless for castling
+// moves because generate_castling() does not use target.
+
+static inline Bitboard trim(Bitboard target, const char* san) {
+
+  if (!san[3] || san[3] == '+')
+      return target & make_square(File(san[1] - 'a'), Rank(san[2] - '1'));
+  return target;
+}
+
 Move Position::san_to_move(const char* san, bool* givesCheck, bool lastOne) {
 
   ExtMove moveList[MAX_MOVES];
@@ -931,31 +941,37 @@ Move Position::san_to_move(const char* san, bool* givesCheck, bool lastOne) {
 
       switch (san[0]) {
       case 'N':
-          last = generate_moves<KNIGHT, false>(*this, moveList, us, target);
+          last = generate_moves<KNIGHT, false>(*this, moveList, us, trim(target, san));
           break;
 
       case 'B':
-          last = generate_moves<BISHOP, false>(*this, moveList, us, target);
+          last = generate_moves<BISHOP, false>(*this, moveList, us, trim(target, san));
           break;
 
       case 'R':
-          last = generate_moves<ROOK, false>(*this, moveList, us, target);
+          last = generate_moves<ROOK, false>(*this, moveList, us, trim(target, san));
           break;
 
       case 'Q':
-          last = generate_moves<QUEEN, false>(*this, moveList, us, target);
+          last = generate_moves<QUEEN, false>(*this, moveList, us, trim(target, san));
           break;
 
       case 'K':
       case 'O':
-          last = us == WHITE ? generate_king_moves<WHITE, NON_EVASIONS, false>(*this, moveList, target)
-                             : generate_king_moves<BLACK, NON_EVASIONS, false>(*this, moveList, target);
+          last = us == WHITE ? generate_king_moves<WHITE, NON_EVASIONS, false>(*this, moveList, trim(target, san))
+                             : generate_king_moves<BLACK, NON_EVASIONS, false>(*this, moveList, trim(target, san));
           break;
 
       default:
           assert(san[0] >= 'a' && san[0] <= 'h');
-          last = us == WHITE ? generate_pawn_moves<WHITE, NON_EVASIONS>(*this, moveList, ~pieces(us))
-                             : generate_pawn_moves<BLACK, NON_EVASIONS>(*this, moveList, ~pieces(us));
+
+          if (isCapture)
+              last = us == WHITE ? generate_pawn_moves<WHITE, CAPTURES>(*this, moveList, target)
+                                 : generate_pawn_moves<BLACK, CAPTURES>(*this, moveList, target);
+          else
+              last = us == WHITE ? generate_pawn_moves<WHITE, QUIETS>(*this, moveList, target)
+                                 : generate_pawn_moves<BLACK, QUIETS>(*this, moveList, target);
+          break;
       }
   }
 
