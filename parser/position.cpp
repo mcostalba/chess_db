@@ -931,48 +931,42 @@ Move Position::san_to_move(const char* san, bool* givesCheck, bool lastOne) {
   ExtMove* last;
   Color us = sideToMove;
 
-  if (checkers())
-    last = generate<EVASIONS>(*this, moveList);
+  bool isCapture = strchr(san, 'x');
+  Bitboard target = isCapture ? pieces(~us) : ~pieces();
 
-  else
-  {
-      bool isCapture = strchr(san, 'x');
-      Bitboard target = isCapture ? pieces(~us) : ~pieces();
+  switch (san[0]) {
+  case 'N':
+      last = generate_moves<KNIGHT, false>(*this, moveList, us, trim(target, san));
+      break;
 
-      switch (san[0]) {
-      case 'N':
-          last = generate_moves<KNIGHT, false>(*this, moveList, us, trim(target, san));
-          break;
+  case 'B':
+      last = generate_moves<BISHOP, false>(*this, moveList, us, trim(target, san));
+      break;
 
-      case 'B':
-          last = generate_moves<BISHOP, false>(*this, moveList, us, trim(target, san));
-          break;
+  case 'R':
+      last = generate_moves<ROOK, false>(*this, moveList, us, trim(target, san));
+      break;
 
-      case 'R':
-          last = generate_moves<ROOK, false>(*this, moveList, us, trim(target, san));
-          break;
+  case 'Q':
+      last = generate_moves<QUEEN, false>(*this, moveList, us, trim(target, san));
+      break;
 
-      case 'Q':
-          last = generate_moves<QUEEN, false>(*this, moveList, us, trim(target, san));
-          break;
+  case 'K':
+  case 'O':
+      last = us == WHITE ? generate_king_moves<WHITE, NON_EVASIONS, false>(*this, moveList, trim(target, san))
+                         : generate_king_moves<BLACK, NON_EVASIONS, false>(*this, moveList, trim(target, san));
+      break;
 
-      case 'K':
-      case 'O':
-          last = us == WHITE ? generate_king_moves<WHITE, NON_EVASIONS, false>(*this, moveList, trim(target, san))
-                             : generate_king_moves<BLACK, NON_EVASIONS, false>(*this, moveList, trim(target, san));
-          break;
+  default:
+      assert(san[0] >= 'a' && san[0] <= 'h');
 
-      default:
-          assert(san[0] >= 'a' && san[0] <= 'h');
-
-          if (isCapture)
-              last = us == WHITE ? generate_pawn_moves<WHITE, CAPTURES>(*this, moveList, target)
-                                 : generate_pawn_moves<BLACK, CAPTURES>(*this, moveList, target);
-          else
-              last = us == WHITE ? generate_pawn_moves<WHITE, QUIETS>(*this, moveList, target)
-                                 : generate_pawn_moves<BLACK, QUIETS>(*this, moveList, target);
-          break;
-      }
+      if (isCapture)
+          last = us == WHITE ? generate_pawn_moves<WHITE, CAPTURES>(*this, moveList, target)
+                             : generate_pawn_moves<BLACK, CAPTURES>(*this, moveList, target);
+      else
+          last = us == WHITE ? generate_pawn_moves<WHITE, QUIETS>(*this, moveList, target)
+                             : generate_pawn_moves<BLACK, QUIETS>(*this, moveList, target);
+      break;
   }
 
   for (ExtMove* m = moveList; m < last; ++m)
