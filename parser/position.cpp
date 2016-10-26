@@ -952,8 +952,8 @@ Move Position::san_to_move(const char* san, bool* givesCheck, bool lastOne) {
       break;
 
   case 'K':
-        last = us == WHITE ? generate_king_moves<WHITE, NON_EVASIONS, false>(*this, moveList, trim(target, san))
-                           : generate_king_moves<BLACK, NON_EVASIONS, false>(*this, moveList, trim(target, san));
+        last = us == WHITE ? generate_king_moves<WHITE, NON_EVASIONS, false, false>(*this, moveList, trim(target, san))
+                           : generate_king_moves<BLACK, NON_EVASIONS, false, false>(*this, moveList, trim(target, san));
       break;
 
   case 'O':

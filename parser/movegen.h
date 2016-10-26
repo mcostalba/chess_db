@@ -276,7 +276,7 @@ inline bool operator<(const ExtMove& f, const ExtMove& s) {
     return moveList;
   }
 
-  template<Color Us, GenType Type, bool Checks>
+  template<Color Us, GenType Type, bool Checks, bool WithCastle = true>
   ExtMove* generate_king_moves(const Position& pos, ExtMove* moveList, Bitboard target) {
 
     if (Type != QUIET_CHECKS && Type != EVASIONS)
@@ -287,7 +287,7 @@ inline bool operator<(const ExtMove& f, const ExtMove& s) {
             *moveList++ = make_move(ksq, pop_lsb(&b));
     }
 
-    if (Type != CAPTURES && Type != EVASIONS && pos.can_castle(Us))
+    if (WithCastle && Type != CAPTURES && Type != EVASIONS && pos.can_castle(Us))
     {
         if (pos.is_chess960())
         {
