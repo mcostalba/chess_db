@@ -831,20 +831,13 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck, bool lastO
   PieceType pt = type_of(pc);
 
   if (type_of(m) == CASTLING)
-  {
-      if (ref[0] != 'O')
-        return false;
-
       san = to > from ? "O-O" : "O-O-O";
-  }
+
   else
   {
       if (pt != PAWN)
       {
           san = PieceToChar[make_piece(WHITE, pt)]; // Upper case
-
-          if (san[0] != ref[0])
-              return false;
 
           // A disambiguation occurs if we have more then one piece of type 'pt'
           // that can reach 'to' with a legal move.
@@ -873,12 +866,7 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck, bool lastO
           }
       }
       else if (capture(m))
-      {
           san = char('a' + file_of(from));
-
-          if (san[0] != ref[0])
-              return false;
-      }
 
       if (capture(m))
           san += 'x';
@@ -925,6 +913,19 @@ static inline Bitboard trim(Bitboard target, const char* san) {
   return target;
 }
 
+static inline Bitboard trimPawn(Bitboard target, const char* san, bool isCapture) {
+
+  if (isCapture)
+  {
+      assert(san[1] == 'x');
+      return target & make_square(File(san[2] - 'a'), Rank(san[3] - '1'));
+  }
+  else
+      return target & file_bb(File(san[0] - 'a'));
+
+  return target;
+}
+
 Move Position::san_to_move(const char* san, bool* givesCheck, bool lastOne) {
 
   ExtMove moveList[MAX_MOVES];
@@ -944,7 +945,7 @@ Move Position::san_to_move(const char* san, bool* givesCheck, bool lastOne) {
       break;
 
   case 'R':
-      last = generate_moves<ROOK, false>(*this, moveList, us, trim(target, san));
+      last = generate_moves<ROOK , false>(*this, moveList, us, trim(target, san));
       break;
 
   case 'Q':
@@ -964,12 +965,14 @@ Move Position::san_to_move(const char* san, bool* givesCheck, bool lastOne) {
   default:
       assert(san[0] >= 'a' && san[0] <= 'h');
 
+      target = trimPawn(target, san, isCapture);
+
       if (isCapture)
           last = us == WHITE ? generate_pawn_moves<WHITE, CAPTURES>(*this, moveList, target)
                              : generate_pawn_moves<BLACK, CAPTURES>(*this, moveList, target);
       else
-          last = us == WHITE ? generate_pawn_moves<WHITE, QUIETS>(*this, moveList, target)
-                             : generate_pawn_moves<BLACK, QUIETS>(*this, moveList, target);
+          last = us == WHITE ? generate_pawn_moves<WHITE,   QUIETS>(*this, moveList, target)
+                             : generate_pawn_moves<BLACK,   QUIETS>(*this, moveList, target);
       break;
   }
 

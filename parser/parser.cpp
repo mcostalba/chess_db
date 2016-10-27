@@ -337,8 +337,8 @@ void process_pgn(const char* fname) {
 
     delete [] KeyTable;
     delete [] PgnTable;
-    KeyTable = new KeyTableType [stats.moves * 5 / 4];
-    PgnTable = new PgnTableType[stats.games * 5 / 4];
+    KeyTable = new KeyTableType [stats.moves];
+    PgnTable = new PgnTableType[stats.games];
 
     TimePoint elapsed = now();
 
