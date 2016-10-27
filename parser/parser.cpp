@@ -21,7 +21,7 @@
 namespace {
 
 struct __attribute__ ((packed)) KeyTableType {
-    uint64_t posKey;
+    uint64_t key;
     uint32_t moveOffset;
 };
 KeyTableType* KeyTable;
@@ -30,7 +30,7 @@ typedef uint16_t MoveTableType;
 MoveTableType* MoveTable;
 
 inline bool operator<(const KeyTableType& f, const KeyTableType& s) {
-    return f.posKey < s.posKey;
+    return f.key < s.key;
 }
 
 struct Stats {
@@ -122,12 +122,15 @@ void parse_game(const char* moves, const char* end, KeyTableType** kt, MoveTable
 
         pos.do_move(move, *st++, givesCheck);
         **mt = uint16_t(move);
-        (*kt)->posKey = pos.key();
+        (*kt)->key = pos.key();
         (*kt)->moveOffset = uint32_t(*mt - MoveTable);
         ++(*mt);
         ++(*kt);
         cur = next;
     }
+
+    **mt = uint16_t(MOVE_NONE); // Games separator
+    ++(*mt);
 }
 
 void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, bool dryRun) {
@@ -314,9 +317,10 @@ void process_pgn(const char* fname) {
 
     std::cerr << "done\nProcessing...";
 
-    // Use malloc() becuase we don't need to init them
+    // Use malloc() becuase we don't need to init them, in the move table add
+    // one MOVE_NONE each game as game separator.
     KeyTable = (KeyTableType*) malloc(stats.moves * sizeof(KeyTableType));
-    MoveTable = (MoveTableType*) malloc(stats.moves * sizeof(MoveTableType));
+    MoveTable = (MoveTableType*) malloc((stats.moves + stats.games)  * sizeof(MoveTableType));
 
     TimePoint elapsed = now();
 
@@ -328,6 +332,10 @@ void process_pgn(const char* fname) {
 
     std::sort(KeyTable, KeyTable + stats.moves);
 
+    size_t uniqueKeys = 1;
+    for (KeyTableType* it = KeyTable + 1; it < KeyTable + stats.moves; ++it)
+        uniqueKeys += (it->key != (it - 1)->key);
+
     std::cerr << "done\nWriting to files...";
 
     std::string posFile = std::string(fname) + ".kidx";
@@ -338,7 +346,7 @@ void process_pgn(const char* fname) {
     fclose(pFile);
 
     pFile = fopen(gameFile.c_str(), "wb");
-    fwrite(MoveTable, sizeof(MoveTableType), stats.moves, pFile);
+    fwrite(MoveTable, sizeof(MoveTableType), stats.moves + stats.games, pFile);
     fclose(pFile);
 
     float ks = float(stats.moves * sizeof(KeyTableType)) / 1024 / 1024;
@@ -347,6 +355,7 @@ void process_pgn(const char* fname) {
     std::cerr << "done\n"
               << "\nGames: " << stats.games
               << "\nMoves: " << stats.moves
+              << "\nUnique positions: " << uniqueKeys
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed
               << "\nMBytes/second: " << float(size) / elapsed / 1000
