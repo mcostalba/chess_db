@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
+#include <map>
 #include <string>
 
 #ifndef _WIN32
@@ -113,6 +114,40 @@ void error(const std::string& desc, const char* data) {
     std::string what = std::string(data, 10);
     std::cerr << desc << ": " << what << "' " << std::endl;
     exit(0);
+}
+
+void sort_by_frequency(KeyTableType* kt, size_t size) {
+
+    struct Score {
+        KeyTableType kt;
+        MoveTableType move;
+        int score;
+    };
+
+    std::map<MoveTableType, int> moves;
+    Score* s = new Score[size];
+
+    for (size_t i = 0; i < size; ++i)
+    {
+        s[i].kt = kt[i];
+        s[i].move = MoveTable[kt[i].moveOffset +  1]; // Next move
+        if (s[i].move != MOVE_NONE)
+            moves[s[i].move]++;
+    }
+
+    for (size_t i = 0; i < size; ++i)
+        s[i].score = moves[s[i].move];
+
+    std::sort(s, s + size, [](const Score& a, const Score& b) -> bool
+                           {
+                               return    a.score > b.score
+                                     || (a.score == b.score && a.move > b.move);
+                           });
+
+    for (size_t i = 0; i < size; ++i)
+        kt[i] = s[i].kt;
+
+    delete [] s;
 }
 
 void parse_game(const char* moves, const char* end, KeyTableType** kt, MoveTableType** mt) {
@@ -312,7 +347,6 @@ void init() {
     CharToToken['='] = CharToToken['O'] = CharToToken['-'] = T_MOVE;
 }
 
-
 void process_pgn(const char* fname) {
 
     uint64_t size;
@@ -343,8 +377,16 @@ void process_pgn(const char* fname) {
     std::sort(KeyTable, KeyTable + stats.moves);
 
     size_t uniqueKeys = 1;
+    KeyTableType* last = KeyTable;
     for (KeyTableType* it = KeyTable + 1; it < KeyTable + stats.moves; ++it)
-        uniqueKeys += (it->key != (it - 1)->key);
+        if (it->key != (it - 1)->key)
+        {
+            if (it - last > 2)
+               sort_by_frequency(last, it - last);
+
+            last = it;
+            uniqueKeys++;
+        }
 
     std::cerr << "done\nWriting to files...";
 
@@ -367,7 +409,7 @@ void process_pgn(const char* fname) {
     std::cerr << "done\n"
               << "\nGames: " << stats.games
               << "\nMoves: " << stats.moves
-              << "\nUnique positions: " << uniqueKeys
+              << "\nUnique positions: " << 100 * uniqueKeys / stats.moves << "%"
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed
               << "\nMBytes/second: " << float(size) / elapsed / 1000
