@@ -48,16 +48,6 @@ enum Token {
     T_CLOSE_BRACKET, T_OPEN_COMMENT, T_CLOSE_COMMENT
 };
 
-
-struct Header {
-    uint64_t moveStartOffset;
-};
-
-union HeaderField {
-    Header h;
-    char padding[64];
-};
-
 Token CharToToken[256];
 Position RootPos;
 
@@ -362,9 +352,15 @@ void process_pgn(const char* fname) {
     std::cerr << "done\nProcessing...";
 
     // Use malloc() becuase we don't need to init them, in the move table add
-    // one MOVE_NONE each game as game separator.
-    KeyTable = (KeyTableType*) malloc(stats.moves * sizeof(KeyTableType));
+    // one MOVE_NONE each game as game separator. We allocate one move more
+    // for teh header at the beginning.
+    KeyTable = (KeyTableType*) malloc((stats.moves + 1) * sizeof(KeyTableType));
     MoveTable = (MoveTableType*) malloc((stats.moves + stats.games)  * sizeof(MoveTableType));
+
+    // First entry is reserved for the header
+    KeyTable->key = 0;
+    KeyTable->moveOffset = (stats.moves + 1) * sizeof(KeyTableType);
+    KeyTable++;
 
     TimePoint elapsed = now();
 
@@ -392,16 +388,10 @@ void process_pgn(const char* fname) {
 
     std::string posFile = std::string(fname) + ".idx";
 
-    HeaderField h;
-    h.h.moveStartOffset = stats.moves * sizeof(KeyTableType);
-
     auto pFile = fopen(posFile.c_str(), "wb");
 
-    // Write header
-    fwrite(&h, sizeof(HeaderField), 1, pFile);
-
-    // Write keys
-    fwrite(KeyTable, sizeof(KeyTableType), stats.moves, pFile);
+    // Write header and keys
+    fwrite(--KeyTable, sizeof(KeyTableType), stats.moves + 1, pFile);
 
     // Write moves
     fwrite(MoveTable, sizeof(MoveTableType), stats.moves + stats.games, pFile);
