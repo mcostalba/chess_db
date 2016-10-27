@@ -47,6 +47,16 @@ enum Token {
     T_CLOSE_BRACKET, T_OPEN_COMMENT, T_CLOSE_COMMENT
 };
 
+
+struct Header {
+    uint64_t moveStartOffset;
+};
+
+union HeaderField {
+    Header h;
+    char padding[64];
+};
+
 Token CharToToken[256];
 Position RootPos;
 
@@ -338,19 +348,21 @@ void process_pgn(const char* fname) {
 
     std::cerr << "done\nWriting to files...";
 
-    std::string posFile = std::string(fname) + ".kidx";
-    std::string gameFile = std::string(fname) + ".gidx";
+    std::string posFile = std::string(fname) + ".idx";
+
+    HeaderField h;
+    h.h.moveStartOffset = stats.moves * sizeof(KeyTableType);
 
     auto pFile = fopen(posFile.c_str(), "wb");
+
+    // Write header
+    fwrite(&h, sizeof(HeaderField), 1, pFile);
+
+    // Write keys
     fwrite(KeyTable, sizeof(KeyTableType), stats.moves, pFile);
-    fclose(pFile);
 
-    pFile = fopen(gameFile.c_str(), "wb");
+    // Write moves
     fwrite(MoveTable, sizeof(MoveTableType), stats.moves + stats.games, pFile);
-    fclose(pFile);
-
-    float ks = float(stats.moves * sizeof(KeyTableType)) / 1024 / 1024;
-    float ps = float(stats.moves * sizeof(MoveTableType)) / 1024 / 1024;
 
     std::cerr << "done\n"
               << "\nGames: " << stats.games
@@ -359,12 +371,11 @@ void process_pgn(const char* fname) {
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed
               << "\nMBytes/second: " << float(size) / elapsed / 1000
-              << "\nSize of positions index (MB): " << ks
-              << "\nSize of games index (MB): " << ps
-              << "\nPositions index: " << posFile
-              << "\nGames index: " << gameFile
+              << "\nSize of index file (MB): " << ftell(pFile)
+              << "\nIndex file: " << posFile
               << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
 
+    fclose(pFile);
     free(KeyTable);
     free(MoveTable);
     unmap(baseAddress, size);
