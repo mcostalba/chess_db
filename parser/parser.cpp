@@ -21,16 +21,14 @@
 
 namespace {
 
-struct __attribute__ ((packed)) KeyTableType {
+struct __attribute__ ((packed)) KeyEntry {
     uint64_t key;
     uint32_t moveOffset;
 };
-KeyTableType* KeyTable;
 
-typedef uint16_t MoveTableType;
-MoveTableType* MoveTable;
+typedef uint16_t MoveEntry;
 
-inline bool operator<(const KeyTableType& f, const KeyTableType& s) {
+inline bool operator<(const KeyEntry& f, const KeyEntry& s) {
     return f.key < s.key;
 }
 
@@ -106,21 +104,21 @@ void error(const std::string& desc, const char* data) {
     exit(0);
 }
 
-void sort_by_frequency(KeyTableType* kt, size_t size) {
+void sort_by_frequency(KeyEntry* kt, size_t size, const MoveEntry* mTable) {
 
     struct Score {
-        KeyTableType kt;
-        MoveTableType move;
+        KeyEntry kt;
+        MoveEntry move;
         int score;
     };
 
-    std::map<MoveTableType, int> moves;
+    std::map<MoveEntry, int> moves;
     Score* s = new Score[size];
 
     for (size_t i = 0; i < size; ++i)
     {
         s[i].kt = kt[i];
-        s[i].move = MoveTable[kt[i].moveOffset +  1]; // Next move
+        s[i].move = mTable[kt[i].moveOffset +  1]; // Next move
         if (s[i].move != MOVE_NONE)
             moves[s[i].move]++;
     }
@@ -140,11 +138,12 @@ void sort_by_frequency(KeyTableType* kt, size_t size) {
     delete [] s;
 }
 
-void parse_game(const char* moves, const char* end, KeyTableType** kt, MoveTableType** mt) {
+void parse_game(const char* moves, const char* end, KeyEntry** kt,
+                MoveEntry** mt, const MoveEntry* mTable) {
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
-    const char* cur = moves, *next = moves;
+    const char *cur = moves, *next = moves;
 
     while (cur < end)
     {
@@ -158,21 +157,21 @@ void parse_game(const char* moves, const char* end, KeyTableType** kt, MoveTable
         pos.do_move(move, *st++, givesCheck);
         **mt = uint16_t(move);
         (*kt)->key = pos.key();
-        (*kt)->moveOffset = uint32_t(*mt - MoveTable);
+        (*kt)->moveOffset = uint32_t(*mt - mTable);
         ++(*mt);
         ++(*kt);
         cur = next;
     }
 
-    **mt = uint16_t(MOVE_NONE); // Games separator
+    **mt = uint16_t(MOVE_NONE); // Game separator
     ++(*mt);
 }
 
-void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, bool dryRun) {
+void parse_pgn(void* baseAddress, uint64_t size, Stats& stats,
+               bool dryRun, KeyEntry* kTable, MoveEntry* mTable) {
 
-    KeyTableType* kt = KeyTable;
-    MoveTableType* mt = MoveTable;
-
+    KeyEntry* kt = kTable;
+    MoveEntry* mt = mTable;
     int state = HEADER, prevState = HEADER;
     char moves[1024 * 8] = {};
     char* curMove = moves;
@@ -289,7 +288,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, bool dryRun) {
             if (tk == T_LF)
             {
                 if (!dryRun)
-                    parse_game(moves, end, &kt, &mt);
+                    parse_game(moves, end, &kt, &mt, mTable);
 
                 gameCnt++;
                 state = HEADER;
@@ -313,9 +312,9 @@ namespace Parser {
 
 void init() {
 
-    static StateInfo St;
-    const char* StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    RootPos.set(StartFEN, false, &St);
+    static StateInfo st;
+    const char* startFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    RootPos.set(startFEN, false, &st);
 
     CharToToken['\n'] = CharToToken['\r'] = T_LF;
     CharToToken[' '] = CharToToken['\t'] = T_SPACE;
@@ -339,6 +338,7 @@ void init() {
 
 void process_pgn(const char* fname) {
 
+    Stats stats;
     uint64_t size;
     void* baseAddress;
 
@@ -346,39 +346,38 @@ void process_pgn(const char* fname) {
 
     std::cerr << "\nAnalizing...";
 
-    Stats stats;
-    parse_pgn(baseAddress, size, stats, true);  // Dry run to get file stats
+    parse_pgn(baseAddress, size, stats, true, nullptr, nullptr);  // Dry run to get file stats
 
     std::cerr << "done\nProcessing...";
 
-    // Use malloc() becuase we don't need to init them, in the move table add
-    // one MOVE_NONE each game as game separator. We allocate one move more
-    // for teh header at the beginning.
-    KeyTable = (KeyTableType*) malloc((stats.moves + 1) * sizeof(KeyTableType));
-    MoveTable = (MoveTableType*) malloc((stats.moves + stats.games)  * sizeof(MoveTableType));
+    // Use malloc() because we don't need to init, in the move table add
+    // MOVE_NONE each game as game separator. We allocate one move more
+    // for the header at the beginning.
+    KeyEntry* kTable = (KeyEntry*) malloc((stats.moves + 1) * sizeof(KeyEntry));
+    MoveEntry* mTable = (MoveEntry*) malloc((stats.moves + stats.games)  * sizeof(MoveEntry));
 
     // First entry is reserved for the header
-    KeyTable->key = 0;
-    KeyTable->moveOffset = (stats.moves + 1) * sizeof(KeyTableType);
-    KeyTable++;
+    kTable->key = 0;
+    kTable->moveOffset = (stats.moves + 1) * sizeof(KeyEntry);
+    kTable++;
 
     TimePoint elapsed = now();
 
-    parse_pgn(baseAddress, size, stats, false);
+    parse_pgn(baseAddress, size, stats, false, kTable, mTable);
 
     elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
 
     std::cerr << "done\nSorting...";
 
-    std::sort(KeyTable, KeyTable + stats.moves);
+    std::sort(kTable, kTable + stats.moves);
 
     size_t uniqueKeys = 1;
-    KeyTableType* last = KeyTable;
-    for (KeyTableType* it = KeyTable + 1; it < KeyTable + stats.moves; ++it)
+    KeyEntry* last = kTable;
+    for (KeyEntry* it = kTable + 1; it < kTable + stats.moves; ++it)
         if (it->key != (it - 1)->key)
         {
             if (it - last > 2)
-               sort_by_frequency(last, it - last);
+               sort_by_frequency(last, it - last, mTable);
 
             last = it;
             uniqueKeys++;
@@ -391,10 +390,10 @@ void process_pgn(const char* fname) {
     auto pFile = fopen(posFile.c_str(), "wb");
 
     // Write header and keys
-    fwrite(--KeyTable, sizeof(KeyTableType), stats.moves + 1, pFile);
+    fwrite(--kTable, sizeof(KeyEntry), stats.moves + 1, pFile);
 
     // Write moves
-    fwrite(MoveTable, sizeof(MoveTableType), stats.moves + stats.games, pFile);
+    fwrite(mTable, sizeof(MoveEntry), stats.moves + stats.games, pFile);
 
     std::cerr << "done\n"
               << "\nGames: " << stats.games
@@ -408,8 +407,8 @@ void process_pgn(const char* fname) {
               << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
 
     fclose(pFile);
-    free(KeyTable);
-    free(MoveTable);
+    free(kTable);
+    free(mTable);
     unmap(baseAddress, size);
 }
 
