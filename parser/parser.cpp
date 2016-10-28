@@ -12,7 +12,9 @@
 #include <sys/stat.h>
 #else
 #define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #endif
 
@@ -65,7 +67,7 @@ void map(const char* fname, void** baseAddress, uint64_t* mapping) {
         exit(1);
     }
 #else
-    HANDLE fd = CreateFile(fname.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+    HANDLE fd = CreateFile(fname, GENERIC_READ, FILE_SHARE_READ, nullptr,
                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     DWORD size_high;
     DWORD size_low = GetFileSize(fd, &size_high);
