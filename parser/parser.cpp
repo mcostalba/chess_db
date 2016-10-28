@@ -26,7 +26,8 @@ struct __attribute__ ((packed)) KeyEntry {
     uint32_t moveOffset;
 };
 
-typedef uint16_t MoveEntry;
+typedef std::vector<KeyEntry> Keys;
+typedef std::vector<Move> Moves;
 
 inline bool operator<(const KeyEntry& f, const KeyEntry& s) {
     return f.key < s.key;
@@ -104,42 +105,42 @@ void error(const std::string& desc, const char* data) {
     exit(0);
 }
 
-void sort_by_frequency(KeyEntry* kt, size_t size, const MoveEntry* mTable) {
+void sort_by_frequency(Keys& kTable, const Moves& mTable, size_t start, size_t end) {
 
     struct Score {
         KeyEntry kt;
-        MoveEntry move;
+        Move move;
         int score;
     };
 
-    std::map<MoveEntry, int> moves;
-    Score* s = new Score[size];
+    std::vector<Score> scores;
+    std::map<Move, int> moves;
+    size_t size = end - start;
+    scores.reserve(size);
 
     for (size_t i = 0; i < size; ++i)
     {
-        s[i].kt = kt[i];
-        s[i].move = mTable[kt[i].moveOffset +  1]; // Next move
-        if (s[i].move != MOVE_NONE)
-            moves[s[i].move]++;
+        Move move = mTable[kTable[i].moveOffset +  1]; // Next move
+        scores.push_back(Score{kTable[i], move, 0});
+        if (move != MOVE_NONE)
+            moves[move]++;
     }
 
     for (size_t i = 0; i < size; ++i)
-        s[i].score = moves[s[i].move];
+        scores[i].score = moves[scores[i].move];
 
-    std::sort(s, s + size, [](const Score& a, const Score& b) -> bool
-                           {
-                               return    a.score > b.score
-                                     || (a.score == b.score && a.move > b.move);
-                           });
+    std::sort(scores.begin(), scores.end(),
+              [](const Score& a, const Score& b) -> bool
+              {
+                  return    a.score > b.score
+                        || (a.score == b.score && a.move > b.move);
+              });
 
     for (size_t i = 0; i < size; ++i)
-        kt[i] = s[i].kt;
-
-    delete [] s;
+        kTable[i] = scores[i].kt;
 }
 
-void parse_game(const char* moves, const char* end, KeyEntry** kt,
-                MoveEntry** mt, const MoveEntry* mTable) {
+void parse_game(const char* moves, const char* end, Keys& kTable, Moves& mTable) {
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
@@ -155,23 +156,17 @@ void parse_game(const char* moves, const char* end, KeyEntry** kt,
             error("Illegal move", cur);
 
         pos.do_move(move, *st++, givesCheck);
-        **mt = uint16_t(move);
-        (*kt)->key = pos.key();
-        (*kt)->moveOffset = uint32_t(*mt - mTable);
-        ++(*mt);
-        ++(*kt);
+        mTable.push_back(move);
+        kTable.push_back({pos.key(), uint32_t(mTable.size() * sizeof(Move))});
         cur = next;
     }
 
-    **mt = uint16_t(MOVE_NONE); // Game separator
-    ++(*mt);
+    mTable.push_back(MOVE_NONE); // Game separator
 }
 
 void parse_pgn(void* baseAddress, uint64_t size, Stats& stats,
-               bool dryRun, KeyEntry* kTable, MoveEntry* mTable) {
+               Keys& kTable, Moves& mTable) {
 
-    KeyEntry* kt = kTable;
-    MoveEntry* mt = mTable;
     int state = HEADER, prevState = HEADER;
     char moves[1024 * 8] = {};
     char* curMove = moves;
@@ -287,9 +282,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats,
         case RESULT:
             if (tk == T_LF)
             {
-                if (!dryRun)
-                    parse_game(moves, end, &kt, &mt, mTable);
-
+                parse_game(moves, end, kTable, mTable);
                 gameCnt++;
                 state = HEADER;
                 end = curMove = moves;
@@ -338,62 +331,54 @@ void init() {
 
 void process_pgn(const char* fname) {
 
+    Keys kTable;
+    Moves mTable;
     Stats stats;
     uint64_t size;
     void* baseAddress;
 
     map(fname, &baseAddress, &size);
 
-    std::cerr << "\nAnalizing...";
+    // Reserve enough capacity according to file size. This is a very crude
+    // estimation, mainly we assume key index to be of same size of the pgn
+    // file, and moves to be half size.
+    kTable.reserve(size / sizeof(KeyEntry));
+    mTable.reserve(size / 2 / sizeof(Move));
 
-    parse_pgn(baseAddress, size, stats, true, nullptr, nullptr);  // Dry run to get file stats
-
-    std::cerr << "done\nProcessing...";
-
-    // Use malloc() because we don't need to init, in the move table add
-    // MOVE_NONE each game as game separator. We allocate one move more
-    // for the header at the beginning.
-    KeyEntry* kTable = (KeyEntry*) malloc((stats.moves + 1) * sizeof(KeyEntry));
-    MoveEntry* mTable = (MoveEntry*) malloc((stats.moves + stats.games)  * sizeof(MoveEntry));
-
-    // First entry is reserved for the header
-    kTable->key = 0;
-    kTable->moveOffset = (stats.moves + 1) * sizeof(KeyEntry);
-    kTable++;
+    std::cerr << "\nProcessing...";
 
     TimePoint elapsed = now();
 
-    parse_pgn(baseAddress, size, stats, false, kTable, mTable);
+    parse_pgn(baseAddress, size, stats, kTable, mTable);
 
     elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
 
     std::cerr << "done\nSorting...";
 
-    std::sort(kTable, kTable + stats.moves);
+    std::sort(kTable.begin(), kTable.end());
 
-    size_t uniqueKeys = 1;
-    KeyEntry* last = kTable;
-    for (KeyEntry* it = kTable + 1; it < kTable + stats.moves; ++it)
-        if (it->key != (it - 1)->key)
+    size_t uniqueKeys = 1, last = 0;
+    for (size_t idx = 1; idx < kTable.size(); ++idx)
+        if (kTable[idx].key != kTable[idx - 1].key)
         {
-            if (it - last > 2)
-               sort_by_frequency(last, it - last, mTable);
+            if (idx - last > 2)
+               sort_by_frequency(kTable, mTable, last, idx);
 
-            last = it;
+            last = idx;
             uniqueKeys++;
         }
 
     std::cerr << "done\nWriting to files...";
 
+    //First entry is reserved for the header
+    const KeyEntry header({kTable.size() * sizeof(KeyEntry), 0});
+
     std::string posFile = std::string(fname) + ".idx";
 
     auto pFile = fopen(posFile.c_str(), "wb");
-
-    // Write header and keys
-    fwrite(--kTable, sizeof(KeyEntry), stats.moves + 1, pFile);
-
-    // Write moves
-    fwrite(mTable, sizeof(MoveEntry), stats.moves + stats.games, pFile);
+    fwrite(&header, sizeof(KeyEntry), 1, pFile);
+    fwrite(kTable.data(), sizeof(KeyEntry), kTable.size(), pFile);
+    fwrite(mTable.data(), sizeof(Move), mTable.size(), pFile);
 
     std::cerr << "done\n"
               << "\nGames: " << stats.games
@@ -407,8 +392,6 @@ void process_pgn(const char* fname) {
               << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
 
     fclose(pFile);
-    free(kTable);
-    free(mTable);
     unmap(baseAddress, size);
 }
 
