@@ -73,13 +73,13 @@ enum Token {
 Token CharToToken[256];
 Position RootPos;
 
-void map(const char* fname, void** baseAddress, uint64_t* mapping) {
+void map(const char* fname, void** baseAddress, uint64_t* mapping, size_t* size) {
 
 #ifndef _WIN32
     struct stat statbuf;
     int fd = ::open(fname, O_RDONLY);
     fstat(fd, &statbuf);
-    *mapping = statbuf.st_size;
+    *mapping = *size = statbuf.st_size;
     *baseAddress = mmap(nullptr, statbuf.st_size, PROT_READ, MAP_SHARED, fd, 0);
     ::close(fd);
 
@@ -100,6 +100,7 @@ void map(const char* fname, void** baseAddress, uint64_t* mapping) {
         exit(1);
     }
 
+    *size = ((size_t)size_high << 32) | (size_t)size_low;
     *mapping = (uint64_t)mmap;
     *baseAddress = MapViewOfFile(mmap, FILE_MAP_READ, 0, 0, 0);
 
@@ -399,10 +400,10 @@ void process_pgn(const char* fname) {
 
     Keys kTable;
     Stats stats;
-    uint64_t size;
+    uint64_t mapping, size;
     void* baseAddress;
 
-    map(fname, &baseAddress, &size);
+    map(fname, &baseAddress, &mapping, &size);
 
     // Reserve enough capacity according to file size. This is a very crude
     // estimation, mainly we assume key index to be of 2 times the size of
@@ -452,7 +453,7 @@ void process_pgn(const char* fname) {
               << "\nBook file: " << bookName
               << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
 
-    unmap(baseAddress, size);
+    unmap(baseAddress, mapping);
 }
 
 }
