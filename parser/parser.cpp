@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <string>
@@ -23,16 +24,36 @@
 
 namespace {
 
-struct __attribute__ ((packed)) KeyEntry {
-    uint64_t key;
-    uint32_t moveOffset;
+typedef uint64_t PKey;  // Polyglot key
+typedef uint16_t PMove; // Polyglot move
+
+/*
+ * A Polyglot book is a series of "entries" of 16 bytes
+
+key    uint64
+move   uint16
+weight uint16
+learn  uint32
+
+All integers are stored highest byte first (regardless of size)
+
+The entries are ordered according to key. Lowest key first.
+*/
+
+struct PolyEntry {
+    PKey     key;
+    PMove    move;
+    uint16_t weight;
+    uint32_t learn;
 };
 
-typedef std::vector<KeyEntry> Keys;
-typedef std::vector<Move> Moves;
+// Acvoid alignment issues with sizeof(PolyEntry)
+const size_t SizeOfPolyEntry = sizeof(PKey) + sizeof(PMove) + sizeof(uint16_t) + sizeof(uint32_t);
 
-inline bool operator<(const KeyEntry& f, const KeyEntry& s) {
-    return f.key < s.key;
+typedef std::vector<PolyEntry> Keys;
+
+inline bool operator<(const PolyEntry& f, const PolyEntry& s) {
+    return f.key  < s.key;
 }
 
 struct Stats {
@@ -107,67 +128,109 @@ void error(const std::string& desc, const char* data) {
     exit(0);
 }
 
-void sort_by_frequency(Keys& kTable, const Moves& mTable, size_t start, size_t end) {
+/// Convert a number of type T into a sequence of bytes and write to file in
+/// big-endian format.
 
-    struct Score {
-        KeyEntry kt;
-        Move move;
-        int score;
-    };
+template<typename T> uint8_t* write(const T& n, uint8_t* data) {
 
-    std::vector<Score> scores;
-    std::map<Move, int> moves;
-    size_t size = end - start;
-    scores.reserve(size);
+  for (int i =  8 * (sizeof(T) - 1); i >= 0; i -= 8, ++data)
+      *data = uint8_t(n >> i);
 
-    for (size_t i = 0; i < size; ++i)
-    {
-        Move move = mTable[kTable[i].moveOffset +  1]; // Next move
-        scores.push_back(Score{kTable[i], move, 0});
-        if (move != MOVE_NONE)
-            moves[move]++;
-    }
-
-    for (size_t i = 0; i < size; ++i)
-        scores[i].score = moves[scores[i].move];
-
-    std::sort(scores.begin(), scores.end(),
-              [](const Score& a, const Score& b) -> bool
-              {
-                  return    a.score > b.score
-                        || (a.score == b.score && a.move > b.move);
-              });
-
-    for (size_t i = 0; i < size; ++i)
-        kTable[i] = scores[i].kt;
+  return data;
 }
 
-void parse_game(const char* moves, const char* end, Keys& kTable, Moves& mTable) {
+template<> uint8_t* write(const PolyEntry& e, uint8_t* data) {
+
+  data = write(e.key, data);
+  data = write(e.move, data);
+  data = write(e.weight, data);
+  return write(e.learn, data);
+}
+
+size_t write_poly_file(const Keys& kTable, const std::string& fname) {
+
+    uint8_t data[SizeOfPolyEntry];
+    std::ofstream ofs;
+    ofs.open(fname, std::ofstream::out | std::ofstream::binary);
+
+    const PolyEntry* prev = &kTable[0];
+
+    for (const PolyEntry& e : kTable)
+        if (e.key != prev->key || e.move != prev->move)
+        {
+            assert(e.weight);
+
+            write(e, data);
+            ofs.write((char*)data, SizeOfPolyEntry);
+            prev = &e;
+        }
+
+    size_t size = ofs.tellp();
+    ofs.close();
+    return size;
+}
+
+void sort_by_frequency(Keys& kTable, size_t start, size_t end) {
+
+    std::map<PMove, int> moves;
+
+    for (size_t i = start; i < end; ++i)
+        moves[kTable[i].move]++;
+
+    for (size_t i = start; i < end; ++i)
+        kTable[i].weight = moves[kTable[i].move];
+
+    std::sort(kTable.begin() + start, kTable.begin() + end,
+              [](const PolyEntry& a, const PolyEntry& b) -> bool
+    {
+        return    a.weight > b.weight
+              || (a.weight == b.weight && a.move > b.move);
+    });
+}
+
+inline PMove to_polyglot(Move m) {
+    // A PolyGlot book move is encoded as follows:
+    //
+    // bit  0- 5: destination square (from 0 to 63)
+    // bit  6-11: origin square (from 0 to 63)
+    // bit 12-13: promotion piece (from KNIGHT == 1 to QUEEN == 4)
+    //
+    // Castling moves follow the "king captures rook" representation. If a book
+    // move is a promotion, we have to convert it to our representation and in
+    // all other cases, we can directly compare with a Move after having masked
+    // out the special Move flags (bit 14-15) that are not supported by PolyGlot.
+
+    if (m & PROMOTION)
+        return PMove((m & 0xFFF) | ((promotion_type(m) - 1) << 12));
+
+    return PMove(m & 0x3FFF);
+}
+
+void parse_game(const char* moves, const char* end, Keys& kTable) {
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
     const char *cur = moves, *next = moves;
 
-    while (cur < end)
+    while (true)
     {
-        while (*next++) {} // Go to next move
+        while (*next++) {} // Go to next move to check for possible mate
 
         bool givesCheck;
         Move move = pos.san_to_move(cur, &givesCheck, next == end);
         if (!move)
             error("Illegal move", cur);
 
+        kTable.push_back({pos.key(), to_polyglot(move), 1, 0});
+        if (next == end)
+            break;
+
         pos.do_move(move, *st++, givesCheck);
-        mTable.push_back(move);
-        kTable.push_back({pos.key(), uint32_t(mTable.size() * sizeof(Move))});
         cur = next;
     }
-
-    mTable.push_back(MOVE_NONE); // Game separator
 }
 
-void parse_pgn(void* baseAddress, uint64_t size, Stats& stats,
-               Keys& kTable, Moves& mTable) {
+void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
     int state = HEADER, prevState = HEADER;
     char moves[1024 * 8] = {};
@@ -284,7 +347,8 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats,
         case RESULT:
             if (tk == T_LF)
             {
-                parse_game(moves, end, kTable, mTable);
+                if (end - moves)
+                    parse_game(moves, end, kTable);
                 gameCnt++;
                 state = HEADER;
                 end = curMove = moves;
@@ -334,7 +398,6 @@ void init() {
 void process_pgn(const char* fname) {
 
     Keys kTable;
-    Moves mTable;
     Stats stats;
     uint64_t size;
     void* baseAddress;
@@ -342,16 +405,15 @@ void process_pgn(const char* fname) {
     map(fname, &baseAddress, &size);
 
     // Reserve enough capacity according to file size. This is a very crude
-    // estimation, mainly we assume key index to be of same size of the pgn
-    // file, and moves to be half size.
-    kTable.reserve(size / sizeof(KeyEntry));
-    mTable.reserve(size / 2 / sizeof(Move));
+    // estimation, mainly we assume key index to be of 2 times the size of
+    // the pgn file, and moves to be half size.
+    kTable.reserve(2 * size / sizeof(PolyEntry));
 
     std::cerr << "\nProcessing...";
 
     TimePoint elapsed = now();
 
-    parse_pgn(baseAddress, size, stats, kTable, mTable);
+    parse_pgn(baseAddress, size, stats, kTable);
 
     elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
 
@@ -364,23 +426,20 @@ void process_pgn(const char* fname) {
         if (kTable[idx].key != kTable[idx - 1].key)
         {
             if (idx - last > 2)
-               sort_by_frequency(kTable, mTable, last, idx);
+               sort_by_frequency(kTable, last, idx);
 
             last = idx;
             uniqueKeys++;
         }
 
-    std::cerr << "done\nWriting to files...";
+    std::cerr << "done\nWriting Polygot book...";
 
-    //First entry is reserved for the header
-    const KeyEntry header({kTable.size() * sizeof(KeyEntry), 0});
-
-    std::string posFile = std::string(fname) + ".idx";
-
-    auto pFile = fopen(posFile.c_str(), "wb");
-    fwrite(&header, sizeof(KeyEntry), 1, pFile);
-    fwrite(kTable.data(), sizeof(KeyEntry), kTable.size(), pFile);
-    fwrite(mTable.data(), sizeof(Move), mTable.size(), pFile);
+    std::string bookName = std::string(fname);
+    size_t lastdot = bookName.find_last_of(".");
+    if (lastdot != std::string::npos)
+        bookName = bookName.substr(0, lastdot);
+    bookName += ".bin";
+    size_t bookSize = write_poly_file(kTable, bookName);
 
     std::cerr << "done\n"
               << "\nGames: " << stats.games
@@ -389,11 +448,10 @@ void process_pgn(const char* fname) {
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed
               << "\nMBytes/second: " << float(size) / elapsed / 1000
-              << "\nSize of index file (MB): " << ftell(pFile)
-              << "\nIndex file: " << posFile
+              << "\nSize of index file (MB): " << bookSize
+              << "\nBook file: " << bookName
               << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
 
-    fclose(pFile);
     unmap(baseAddress, size);
 }
 
