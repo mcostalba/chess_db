@@ -30,6 +30,8 @@
 #include "movegen.h"
 #include "position.h"
 
+#include "polyglot.cpp"
+
 using std::string;
 
 namespace PSQT {
@@ -69,10 +71,10 @@ void Position::init() {
 
   for (Piece pc : Pieces)
       for (Square s = SQ_A1; s <= SQ_H8; ++s)
-          Zobrist::psq[pc][s] = rng.rand<Key>();
+          Zobrist::psq[pc][s] = PG.Zobrist.psq[2 * (type_of(pc) - 1) + (color_of(pc) == WHITE)][s];
 
   for (File f = FILE_A; f <= FILE_H; ++f)
-      Zobrist::enpassant[f] = rng.rand<Key>();
+      Zobrist::enpassant[f] = PG.Zobrist.enpassant[f];
 
   for (int cr = NO_CASTLING; cr <= ANY_CASTLING; ++cr)
   {
@@ -80,12 +82,13 @@ void Position::init() {
       Bitboard b = cr;
       while (b)
       {
-          Key k = Zobrist::castling[1ULL << pop_lsb(&b)];
-          Zobrist::castling[cr] ^= k ? k : rng.rand<Key>();
+          auto idx = pop_lsb(&b);
+          Key k = Zobrist::castling[1ULL << idx];
+          Zobrist::castling[cr] ^= k ? k : PG.Zobrist.castling[idx];
       }
   }
 
-  Zobrist::side = rng.rand<Key>();
+  Zobrist::side = PG.Zobrist.turn;
 
   for (int i = 0; i < PGN_MAX_PLY; ++i)
       for (Square s = SQ_A1; s <= SQ_H8; ++s)
@@ -288,7 +291,7 @@ void Position::set_state(StateInfo* si) const {
   if (si->epSquare != SQ_NONE)
       si->key ^= Zobrist::enpassant[file_of(si->epSquare)];
 
-  if (sideToMove == BLACK)
+  if (sideToMove == WHITE)
       si->key ^= Zobrist::side;
 
   si->key ^= Zobrist::castling[si->castlingRights];

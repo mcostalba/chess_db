@@ -391,4 +391,17 @@ inline void Position::move_piece(Piece pc, Square from, Square to) {
   pieceList[pc][index[to]] = to;
 }
 
+
+/// A Polyglot book is a series of "entries" of 16 bytes. All integers are
+/// stored in big-endian format, with the highest byte first (regardless of
+/// size). The entries are ordered according to the key in ascending order.
+struct Entry {
+  uint64_t key;
+  uint16_t move;
+  uint16_t count;
+  uint32_t learn;
+};
+
+Key polyglot_key(const Position& pos);
+
 #endif // #ifndef POSITION_H_INCLUDED
