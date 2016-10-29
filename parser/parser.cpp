@@ -66,7 +66,7 @@ enum State {
 };
 
 enum Token {
-    T_NONE, T_LF, T_SPACE, T_DOT, T_RESULT, T_DIGIT, T_MOVE, T_OPEN_BRACKET,
+    T_NONE, T_SPACE, T_DOT, T_RESULT, T_DIGIT, T_MOVE, T_OPEN_BRACKET,
     T_CLOSE_BRACKET, T_OPEN_COMMENT, T_CLOSE_COMMENT
 };
 
@@ -259,7 +259,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 prevState = state;
                 state = COMMENT;
             }
-            else if (tk != T_LF && tk != T_SPACE)
+            else if (tk != T_SPACE)
                 error("Wrong header", data);
             break;
 
@@ -333,7 +333,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 curMove = end;
                 moveCnt++;
             }
-            else if (tk == T_DIGIT)
+            else if (tk == T_DIGIT || tk == T_RESULT)
                 state = RESULT;
 
             else if (tk == T_OPEN_COMMENT)
@@ -346,7 +346,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             break;
 
         case RESULT:
-            if (tk == T_LF)
+            if (tk == T_SPACE)
             {
                 if (end - moves)
                     parse_game(moves, end, kTable);
@@ -376,8 +376,8 @@ void init() {
     const char* startFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     RootPos.set(startFEN, false, &st);
 
-    CharToToken['\n'] = CharToToken['\r'] = T_LF;
-    CharToToken[' '] = CharToToken['\t'] = T_SPACE;
+    CharToToken['\n'] = CharToToken['\r'] =
+    CharToToken[' ']  = CharToToken['\t'] = T_SPACE;
     CharToToken['.'] = T_DOT;
     CharToToken['/'] = CharToToken['*'] = T_RESULT;
     CharToToken['['] = T_OPEN_BRACKET;
