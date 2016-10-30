@@ -82,15 +82,17 @@ struct Stats {
 };
 
 enum State {
-    HEADER, BRACKET, COMMENT, NEW_MOVE, WHITE_MOVE, BLACK_MOVE, RESULT
+    HEADER, TAG, BRACE_COMMENT, NUMERIC_ANNOTATION_GLYPH, VARIATION,
+    MOVE_NUMBER, WHITE_MOVE, BLACK_MOVE, RESULT
 };
 
 enum Token {
-    T_NONE, T_SPACE, T_DOT, T_RESULT, T_DIGIT, T_MOVE, T_OPEN_BRACKET,
-    T_CLOSE_BRACKET, T_OPEN_COMMENT, T_CLOSE_COMMENT
+    T_NONE, T_SPACES, T_DOT, T_DOLLAR, T_RESULT, T_DIGIT, T_MOVE,
+    T_LEFT_BRACKET, T_RIGHT_BRACKET, T_LEFT_BRACE, T_RIGHT_BRACE,
+    T_LEFT_PARENTHESIS, T_RIGHT_PARENTHESIS
 };
 
-Token CharToToken[256];
+Token ToToken[256];
 Position RootPos;
 
 void map(const char* fname, void** baseAddress, uint64_t* mapping, size_t* size) {
@@ -145,7 +147,7 @@ void unmap(void* baseAddress, uint64_t mapping) {
 void error(const std::string& desc, const char* data) {
 
     std::string what = std::string(data, 10);
-    std::cerr << desc << ": " << what << "' " << std::endl;
+    std::cerr << desc << ": '" << what << "' " << std::endl;
     exit(0);
 }
 
@@ -241,7 +243,7 @@ void parse_game(const char* moves, const char* end, Keys& kTable) {
         Move move = pos.san_to_move(cur, &givesCheck, next == end);
         if (!move)
         {
-            std::cerr << "\nIllegal move: " << cur << "\n" << pos << std::endl;
+            std::cerr << "\nWrong move notation: " << cur << "\n" << pos << std::endl;
             break;
         }
 
@@ -256,7 +258,8 @@ void parse_game(const char* moves, const char* end, Keys& kTable) {
 
 void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
-    int state = HEADER, prevState = HEADER;
+    int state = HEADER;
+    int stateStack[16], *stateSp = stateStack;
     char moves[1024 * 8] = {};
     char* curMove = moves;
     char* end = curMove;
@@ -266,77 +269,112 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
     for (  ; data < eof; ++data)
     {
-        Token tk = CharToToken[*(uint8_t*)data];
+        Token tk = ToToken[*(uint8_t*)data];
 
         switch (state)
         {
         case HEADER:
-            if (tk == T_OPEN_BRACKET)
-                state = BRACKET;
-
-            else if (tk == T_DIGIT)
-                state = NEW_MOVE;
-
-            else if (tk == T_OPEN_COMMENT)
+            if (tk == T_LEFT_BRACKET)
             {
-                prevState = state;
-                state = COMMENT;
+                *stateSp++ = state;
+                state = TAG;
             }
-            else if (tk != T_SPACE)
+            else if (tk == T_DIGIT)
+                state = MOVE_NUMBER;
+
+            else if (tk == T_LEFT_BRACE)
+            {
+                *stateSp++ = state;
+                state = BRACE_COMMENT;
+            }
+            else if (tk == T_RESULT)
+                state = RESULT;
+
+            else if (tk != T_SPACES)
                 error("Wrong header", data);
             break;
 
-        case BRACKET:
-            if (tk == T_CLOSE_BRACKET)
-                state = HEADER;
+        case TAG:
+            if (tk == T_RIGHT_BRACKET)
+                state = *(--stateSp);
+
+            else if (tk == T_LEFT_BRACKET) // Nested bracket in a tag
+                *stateSp++ = state;
             break;
 
-        case COMMENT:
-            if (tk == T_CLOSE_COMMENT)
-                state = prevState;
+        case BRACE_COMMENT:
+            if (tk == T_RIGHT_BRACE)
+                state = *(--stateSp);
+
+            else if (tk == T_LEFT_BRACE) // Nested comment
+                *stateSp++ = state;
             break;
 
-        case NEW_MOVE:
+        case VARIATION:
+            if (tk == T_RIGHT_PARENTHESIS)
+                state = *(--stateSp);
+
+            else if (tk == T_LEFT_PARENTHESIS) // Nested variation
+                *stateSp++ = state;
+
+            else if (tk == T_LEFT_BRACE) // Nested comment
+            {
+                *stateSp++ = state;
+                state = BRACE_COMMENT;
+            }
+            break;
+
+        case NUMERIC_ANNOTATION_GLYPH:
+            if (tk == T_DIGIT)
+                continue;
+            state = *(--stateSp);
+            break;
+
+        case MOVE_NUMBER:
             if (tk == T_DIGIT)
                 continue;
 
             else if (tk == T_DOT)
                 state = WHITE_MOVE;
 
-            else if (tk == T_SPACE && end == curMove)
+            else if (tk == T_SPACES && end == curMove)
                 continue;
 
-            else if (tk == T_RESULT || *data == '-')
+            else if (tk == T_RESULT)
                 state = RESULT;
 
-            else if (tk == T_OPEN_COMMENT)
+            else if (tk == T_LEFT_BRACE || tk == T_LEFT_PARENTHESIS || tk == T_DOLLAR)
             {
-                prevState = state;
-                state = COMMENT;
+                *stateSp++ = state;
+                state =  tk == T_LEFT_BRACE       ? BRACE_COMMENT
+                       : tk == T_LEFT_PARENTHESIS ? VARIATION : NUMERIC_ANNOTATION_GLYPH;
             }
             else
-                error("Wrong new move", data);
+                error("Wrong move number", data);
             break;
 
         case WHITE_MOVE:
             if (tk == T_MOVE || (tk == T_DIGIT && end != curMove))
                 *end++ = *data;
 
-            else if (tk == T_SPACE && end == curMove)
+            else if (tk == T_SPACES && end == curMove)
                 continue;
 
-            else if (tk == T_SPACE && end != curMove)
+            else if (tk == T_SPACES && end != curMove)
             {
                 state = BLACK_MOVE;
                 *end++ = 0; // Zero-terminating string
                 curMove = end;
                 moveCnt++;
             }
+            else if (*data == '-' && end != curMove) // Castling: '-' is also a result
+                *end++ = *data;
 
-            else if (tk == T_OPEN_COMMENT)
+            else if (tk == T_LEFT_BRACE || tk == T_LEFT_PARENTHESIS || tk == T_DOLLAR)
             {
-                prevState = state;
-                state = COMMENT;
+                *stateSp++ = state;
+                state =  tk == T_LEFT_BRACE       ? BRACE_COMMENT
+                       : tk == T_LEFT_PARENTHESIS ? VARIATION : NUMERIC_ANNOTATION_GLYPH;
             }
             else
                 error("Wrong white move", data);
@@ -346,30 +384,37 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             if (tk == T_MOVE || (tk == T_DIGIT && end != curMove))
                 *end++ = *data;
 
-            else if (tk == T_SPACE && end == curMove)
+            else if (tk == T_SPACES && end == curMove)
                 continue;
 
-            else if (tk == T_SPACE && end != curMove)
+            else if (tk == T_SPACES && end != curMove)
             {
-                state = NEW_MOVE;
+                state = MOVE_NUMBER;
                 *end++ = 0; // Zero-terminating string
                 curMove = end;
                 moveCnt++;
             }
-            else if (tk == T_DIGIT || tk == T_RESULT)
+            else if (*data == '-' && end != curMove) // Castling: '-' is also a result
+                *end++ = *data;
+
+            else if (tk == T_RESULT)
                 state = RESULT;
 
-            else if (tk == T_OPEN_COMMENT)
+            else if ((tk == T_DIGIT || tk == T_DOT) && end == curMove)
+                continue; // Like 4... exd5 5. Bg2
+
+            else if (tk == T_LEFT_BRACE || tk == T_LEFT_PARENTHESIS || tk == T_DOLLAR)
             {
-                prevState = state;
-                state = COMMENT;
+                *stateSp++ = state;
+                state =  tk == T_LEFT_BRACE       ? BRACE_COMMENT
+                       : tk == T_LEFT_PARENTHESIS ? VARIATION : NUMERIC_ANNOTATION_GLYPH;
             }
             else
                 error("Wrong black move", data);
             break;
 
         case RESULT:
-            if (tk == T_SPACE)
+            if (tk == T_SPACES)
             {
                 if (end - moves)
                     parse_game(moves, end, kTable);
@@ -399,24 +444,25 @@ void init() {
     const char* startFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     RootPos.set(startFEN, false, &st);
 
-    CharToToken['\n'] = CharToToken['\r'] =
-    CharToToken[' ']  = CharToToken['\t'] = T_SPACE;
-    CharToToken['.'] = T_DOT;
-    CharToToken['/'] = CharToToken['*'] = T_RESULT;
-    CharToToken['['] = T_OPEN_BRACKET;
-    CharToToken[']'] = T_CLOSE_BRACKET;
-    CharToToken['{'] = T_OPEN_COMMENT;
-    CharToToken['}'] = T_CLOSE_COMMENT;
-
-    CharToToken['0'] = CharToToken['1'] = CharToToken['2'] = CharToToken['3'] =
-    CharToToken['4'] = CharToToken['5'] = CharToToken['6'] = CharToToken['7'] =
-    CharToToken['8'] = CharToToken['9'] = T_DIGIT;
-
-    CharToToken['a'] = CharToToken['b'] = CharToToken['c'] = CharToToken['d'] =
-    CharToToken['e'] = CharToToken['f'] = CharToToken['g'] = CharToToken['h'] =
-    CharToToken['N'] = CharToToken['B'] = CharToToken['R'] = CharToToken['Q'] =
-    CharToToken['K'] = CharToToken['x'] = CharToToken['+'] = CharToToken['#'] =
-    CharToToken['='] = CharToToken['O'] = CharToToken['-'] = T_MOVE;
+    ToToken['\n'] = ToToken['\r'] = ToToken[' '] = ToToken['\t'] = T_SPACES;
+    ToToken['!'] = ToToken['?'] = T_SPACES;
+    ToToken['/'] = ToToken['-'] = ToToken['*'] = T_RESULT;
+    ToToken['.'] = T_DOT;
+    ToToken['$'] = T_DOLLAR;
+    ToToken['['] = T_LEFT_BRACKET;
+    ToToken[']'] = T_RIGHT_BRACKET;
+    ToToken['{'] = T_LEFT_BRACE;
+    ToToken['}'] = T_RIGHT_BRACE;
+    ToToken['('] = T_LEFT_PARENTHESIS;
+    ToToken[')'] = T_RIGHT_PARENTHESIS;
+    ToToken['0'] = ToToken['1'] = ToToken['2'] = ToToken['3'] =
+    ToToken['4'] = ToToken['5'] = ToToken['6'] = ToToken['7'] =
+    ToToken['8'] = ToToken['9'] = T_DIGIT;
+    ToToken['a'] = ToToken['b'] = ToToken['c'] = ToToken['d'] =
+    ToToken['e'] = ToToken['f'] = ToToken['g'] = ToToken['h'] =
+    ToToken['N'] = ToToken['B'] = ToToken['R'] = ToToken['Q'] =
+    ToToken['K'] = ToToken['x'] = ToToken['+'] = ToToken['#'] =
+    ToToken['='] = ToToken['O'] = T_MOVE;
 }
 
 void process_pgn(const char* fname) {

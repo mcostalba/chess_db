@@ -946,6 +946,10 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck, bool lastO
 
   if (*givesCheck)
   {
+      // Be forgivng if the move is missing check annotation
+      if (ref == san)
+          return true;
+
       if (lastOne)
       {
           // Be forgivng if a mate move is annotated as a simple check
