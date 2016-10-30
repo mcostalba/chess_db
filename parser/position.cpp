@@ -59,7 +59,62 @@ std::string uci_square(Square s) {
   return std::string{ char('a' + file_of(s)), char('1' + rank_of(s)) };
 }
 
+/// UCI::move() converts a Move to a string in coordinate notation (g1f3, a7a8q).
+/// The only special case is castling, where we print in the e1g1 notation in
+/// normal chess mode, and in e1h1 notation in chess960 mode. Internally all
+/// castling moves are always encoded as 'king captures rook'.
+
+string uci_move(Move m, bool chess960) {
+
+  Square from = from_sq(m);
+  Square to = to_sq(m);
+
+  if (m == MOVE_NONE)
+      return "(none)";
+
+  if (m == MOVE_NULL)
+      return "0000";
+
+  if (type_of(m) == CASTLING && !chess960)
+      to = make_square(to > from ? FILE_G : FILE_C, rank_of(from));
+
+  string move = uci_square(from) + uci_square(to);
+
+  if (type_of(m) == PROMOTION)
+      move += " pnbrqk"[promotion_type(m)];
+
+  return move;
+}
+
 } // namespace
+
+
+/// operator<<(Position) returns an ASCII representation of the position
+
+std::ostream& operator<<(std::ostream& os, const Position& pos) {
+
+  os << "\n +---+---+---+---+---+---+---+---+\n";
+
+  for (Rank r = RANK_8; r >= RANK_1; --r)
+  {
+      for (File f = FILE_A; f <= FILE_H; ++f)
+          os << " | " << PieceToChar[pos.piece_on(make_square(f, r))];
+
+      os << " |\n +---+---+---+---+---+---+---+---+\n";
+  }
+
+  os << "\nFen: " << pos.fen() << "\nKey: " << std::hex << std::uppercase
+     << std::setfill('0') << std::setw(16) << pos.key() << std::dec << "\nCheckers: ";
+
+  for (Bitboard b = pos.checkers(); b; )
+      os << uci_square(pop_lsb(&b)) << " ";
+
+  os << "\nLegal moves: ";
+  for (const auto& m : MoveList<LEGAL>(pos))
+      os << uci_move(m.move, pos.is_chess960()) << " ";
+
+  return os;
+}
 
 
 /// Position::init() initializes at startup the various arrays used to compute
@@ -893,6 +948,10 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck, bool lastO
   {
       if (lastOne)
       {
+          // Be forgivng if a mate move is annotated as a simple check
+          if (ref == san + '+' || ref == san + '#')
+              return true;
+
           StateInfo si;
           do_move(m, si, true);
           san += MoveList<LEGAL>(*this).size() ? '+' : '#';
