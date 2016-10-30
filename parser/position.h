@@ -148,8 +148,8 @@ public:
   int game_ply() const;
   bool is_chess960() const;
   bool is_draw() const;
-  bool move_is_san(Move m, const char* ref, bool* givesCheck, bool lastOne);
-  Move san_to_move(const char* san, bool* givesCheck, bool lastOne);
+  bool move_is_san(Move m, const char* ref) const;
+  Move san_to_move(const char* san) const;
 
   // Position consistency check, for debugging
   bool pos_is_ok(int* failedStep = nullptr) const;

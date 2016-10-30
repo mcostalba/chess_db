@@ -21,7 +21,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef> // For offsetof()
-#include <cstring> // For std::memset, std::memcmp
+#include <cstring> // For std::memset, std::memcmp, strcmp
 #include <iomanip>
 #include <sstream>
 
@@ -667,8 +667,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   assert(type_of(captured) != KING);
 
   // Build pgn key, as an unique sequence of moves
-  const Key* pgn = Zobrist::pgn[gamePly / PGN_MAX_PLY];
-  st->pgnKey ^= pgn[from] ^ pgn[to];
+//  const Key* pgn = Zobrist::pgn[gamePly / PGN_MAX_PLY];
+//  st->pgnKey ^= pgn[from] ^ pgn[to];
 
   if (type_of(m) == CASTLING)
   {
@@ -877,25 +877,28 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 
 /// Position::move_is_san() takes a legal Move and a san as input and returns true if equivalent
 
-bool Position::move_is_san(Move m, const char* ref, bool *givesCheck, bool lastOne) {
+bool Position::move_is_san(Move m, const char* ref) const {
 
   assert(m != MOVE_NONE);
 
   Bitboard others, b;
-  string san;
+  char buf[8], *san = buf;
   Square from = from_sq(m);
   Square to = to_sq(m);
   Piece pc = piece_on(from);
   PieceType pt = type_of(pc);
 
   if (type_of(m) == CASTLING)
-      san = to > from ? "O-O" : "O-O-O";
-
+  {
+      int last = to > from ? 3 : 5;
+      int cmp = to > from ? strncmp(ref, "O-O", 3) : strncmp(ref, "O-O-O", 5);
+      return !cmp && (ref[last] == '\0' || ref[last] == '+' || ref[last] == '#');
+  }
   else
   {
       if (pt != PAWN)
       {
-          san = PieceToChar[make_piece(WHITE, pt)]; // Upper case
+          *san++ = PieceToChar[make_piece(WHITE, pt)]; // Upper case
 
           // A disambiguation occurs if we have more then one piece of type 'pt'
           // that can reach 'to' with a legal move.
@@ -912,60 +915,41 @@ bool Position::move_is_san(Move m, const char* ref, bool *givesCheck, bool lastO
           { /* Disambiguation is not needed */ }
 
           else if (!(others & file_bb(from)))
-              san += char('a' + file_of(from));
+              *san++ = char('a' + file_of(from));
 
           else if (!(others & rank_bb(from)))
-              san += char('1' + rank_of(from));
+              *san++ = char('1' + rank_of(from));
 
           else
           {
-              san += char('a' + file_of(from));
-              san += char('1' + rank_of(from));
+              *san++ = char('a' + file_of(from));
+              *san++ = char('1' + rank_of(from));
           }
+
+          if (capture(m))
+              *san++ =  'x';
       }
       else if (capture(m))
-          san = char('a' + file_of(from));
+      {
+          *san++ = char('a' + file_of(from));
+          *san++ = 'x';
+      }
 
-      if (capture(m))
-          san += 'x';
+      *san++ = char('a' + file_of(to));
+      *san++ = char('1' + rank_of(to));
 
-      san += char('a' + file_of(to));
-      san += char('1' + rank_of(to));
-
-      if (san[0] != ref[0] || san[1] != ref[1])
+      if (buf[0] != ref[0] || buf[1] != ref[1])
           return false;
 
       if (type_of(m) == PROMOTION)
       {
-          san += '=';
-          san += PieceToChar[make_piece(WHITE, promotion_type(m))];
+          *san++ = '=';
+          *san++ = PieceToChar[make_piece(WHITE, promotion_type(m))];
       }
   }
 
-  *givesCheck = gives_check(m);
-
-  if (*givesCheck)
-  {
-      // Be forgivng if the move is missing check annotation
-      if (ref == san)
-          return true;
-
-      if (lastOne)
-      {
-          // Be forgivng if a mate move is annotated as a simple check
-          if (ref == san + '+' || ref == san + '#')
-              return true;
-
-          StateInfo si;
-          do_move(m, si, true);
-          san += MoveList<LEGAL>(*this).size() ? '+' : '#';
-          undo_move(m);
-      }
-      else
-          san += '+'; // Can't be mate if we have more moves
-  }
-
-  return san == ref;
+  // Be forgivng if the move is missing check annotation
+  return !strncmp(ref, buf, san - buf);
 }
 
 
@@ -992,7 +976,7 @@ static inline Bitboard trimPawn(Bitboard target, const char* san, bool isCapture
   return target;
 }
 
-Move Position::san_to_move(const char* san, bool* givesCheck, bool lastOne) {
+Move Position::san_to_move(const char* san) const {
 
   ExtMove moveList[MAX_MOVES];
   ExtMove* last;
@@ -1043,7 +1027,7 @@ Move Position::san_to_move(const char* san, bool* givesCheck, bool lastOne) {
   }
 
   for (ExtMove* m = moveList; m < last; ++m)
-      if (move_is_san(m->move, san, givesCheck, lastOne) && legal(m->move))
+      if (move_is_san(m->move, san) && legal(m->move))
           return m->move;
 
   return MOVE_NONE;

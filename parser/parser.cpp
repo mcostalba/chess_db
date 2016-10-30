@@ -237,10 +237,9 @@ void parse_game(const char* moves, const char* end, Keys& kTable) {
 
     while (true)
     {
-        while (*next++) {} // Go to next move to check for possible mate
+        while (*next++) {} // Go to next move
 
-        bool givesCheck;
-        Move move = pos.san_to_move(cur, &givesCheck, next == end);
+        Move move = pos.san_to_move(cur);
         if (!move)
         {
             std::cerr << "\nWrong move notation: " << cur << "\n" << pos << std::endl;
@@ -251,7 +250,7 @@ void parse_game(const char* moves, const char* end, Keys& kTable) {
         if (next == end)
             break;
 
-        pos.do_move(move, *st++, givesCheck);
+        pos.do_move(move, *st++, pos.gives_check(move));
         cur = next;
     }
 }
