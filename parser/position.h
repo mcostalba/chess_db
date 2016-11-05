@@ -148,7 +148,7 @@ public:
   int game_ply() const;
   bool is_chess960() const;
   bool is_draw() const;
-  bool move_is_san(Move m, const char* ref) const;
+  template<bool Strict = true> bool move_is_san(Move m, const char* ref) const;
   Move san_to_move(const char* san) const;
 
   // Position consistency check, for debugging

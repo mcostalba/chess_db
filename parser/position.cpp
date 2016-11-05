@@ -876,7 +876,7 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 
 
 /// Position::move_is_san() takes a legal Move and a san as input and returns true if equivalent
-
+template<bool Strict>
 bool Position::move_is_san(Move m, const char* ref) const {
 
   assert(m != MOVE_NONE);
@@ -904,7 +904,7 @@ bool Position::move_is_san(Move m, const char* ref) const {
           // that can reach 'to' with a legal move.
           others = b = (attacks_from(pc, to) & pieces(sideToMove, pt)) ^ from;
 
-          while (b)
+          while (Strict && b)
           {
               Square s = pop_lsb(&b);
               if (!legal(make_move(s, to)))
@@ -1028,6 +1028,11 @@ Move Position::san_to_move(const char* san) const {
 
   for (ExtMove* m = moveList; m < last; ++m)
       if (move_is_san(m->move, san) && legal(m->move))
+          return m->move;
+
+  // Retry with disambiguation rule relaxed, this is slow path anyhow
+  for (ExtMove* m = moveList; m < last; ++m)
+      if (move_is_san<false>(m->move, san) && legal(m->move))
           return m->move;
 
   return MOVE_NONE;
