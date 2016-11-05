@@ -386,6 +386,12 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             else if (*data == '-' && end != curMove) // Castling: '-' is also a result
                 *end++ = *data;
 
+            else if (tk == T_RESULT)
+                state = RESULT;
+
+            else if (tk == T_DIGIT && end == curMove) // Can be a result
+                continue;
+
             else if (tk == T_LEFT_BRACE || tk == T_LEFT_PARENTHESIS || tk == T_DOLLAR)
             {
                 *stateSp++ = state;
