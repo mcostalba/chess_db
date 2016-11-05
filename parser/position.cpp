@@ -926,13 +926,15 @@ bool Position::move_is_san(Move m, const char* ref) const {
               *san++ = char('1' + rank_of(from));
           }
 
-          if (capture(m))
+          if (capture(m) && (Strict || strchr(ref,'x')))
               *san++ =  'x';
       }
       else if (capture(m))
       {
           *san++ = char('a' + file_of(from));
-          *san++ = 'x';
+
+          if (Strict || strchr(ref,'x'))
+              *san++ = 'x';
       }
 
       *san++ = char('a' + file_of(to));
@@ -1036,6 +1038,13 @@ Move Position::san_to_move(const char* san) const {
   for (ExtMove* m = moveList; m < last; ++m)
       if (move_is_san<false>(m->move, san) && legal(m->move))
           return m->move;
+
+  // If is a capture withouth 'x' we may have missed it, so regenerate move list
+  // to include captures and retry.
+  if (!isCapture)
+      for (const ExtMove& m : MoveList<PSEUDO_LEGAL>(*this))
+          if (move_is_san<false>(m.move, san) && legal(m.move))
+              return m.move;
 
   return MOVE_NONE;
 }
