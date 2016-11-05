@@ -82,7 +82,7 @@ struct Stats {
 };
 
 enum State {
-    HEADER, TAG, BRACE_COMMENT, NUMERIC_ANNOTATION_GLYPH, VARIATION,
+    BOM, HEADER, TAG, BRACE_COMMENT, NUMERIC_ANNOTATION_GLYPH, VARIATION,
     MOVE_NUMBER, WHITE_MOVE, BLACK_MOVE, RESULT
 };
 
@@ -258,7 +258,7 @@ void parse_game(const char* moves, const char* end, Keys& kTable) {
 
 void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
-    int state = HEADER;
+    int state = BOM;
     int stateStack[16], *stateSp = stateStack;
     char moves[1024 * 8] = {};
     char* curMove = moves;
@@ -273,6 +273,17 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
         switch (state)
         {
+        case BOM: // Some editors place UTF8 byte order mark at the beginning
+            if (tk == T_LEFT_BRACKET)
+            {
+                state = HEADER;
+                *stateSp++ = state; // Force TAG
+                state = TAG;
+            }
+            else if (tk == T_DIGIT)
+                state = MOVE_NUMBER;
+            break;
+
         case HEADER:
             if (tk == T_LEFT_BRACKET)
             {
