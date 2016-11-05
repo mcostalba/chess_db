@@ -349,6 +349,11 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 state =  tk == T_LEFT_BRACE       ? BRACE_COMMENT
                        : tk == T_LEFT_PARENTHESIS ? VARIATION : NUMERIC_ANNOTATION_GLYPH;
             }
+            else if (tk == T_MOVE) // This can happen when dot is missing, like: 1 e4 e5 2 Nf3 Nc6
+            {
+                state = WHITE_MOVE;
+                *end++ = *data;
+            }
             else
                 error("Wrong move number", data);
             break;
