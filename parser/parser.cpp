@@ -242,7 +242,8 @@ void parse_game(const char* moves, const char* end, Keys& kTable) {
         Move move = pos.san_to_move(cur);
         if (!move)
         {
-            std::cerr << "\nWrong move notation: " << cur << "\n" << pos << std::endl;
+            std::string sep = pos.side_to_move() == WHITE ? "" : "..";
+            std::cerr << "\nWrong move notation: " << sep << cur << "\n" << pos << std::endl;
             break;
         }
 
