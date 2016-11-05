@@ -943,7 +943,9 @@ bool Position::move_is_san(Move m, const char* ref) const {
 
       if (type_of(m) == PROMOTION)
       {
-          *san++ = '=';
+          if (Strict) // Sometime promotion move misses the '='
+              *san++ = '=';
+
           *san++ = PieceToChar[make_piece(WHITE, promotion_type(m))];
       }
   }
