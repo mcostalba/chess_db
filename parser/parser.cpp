@@ -354,6 +354,17 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 state = WHITE_MOVE;
                 *end++ = *data;
             }
+            else if (tk == T_LEFT_BRACKET) // Missing result, start next game
+            {
+                if (end - moves) // Force RESULT
+                    parse_game(moves, end, kTable);
+                gameCnt++;
+                state = HEADER;
+                end = curMove = moves;
+
+                *stateSp++ = state; // Force TAG
+                state = TAG;
+            }
             else
                 error("Wrong move number", data);
             break;
@@ -413,6 +424,17 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 *stateSp++ = state;
                 state =  tk == T_LEFT_BRACE       ? BRACE_COMMENT
                        : tk == T_LEFT_PARENTHESIS ? VARIATION : NUMERIC_ANNOTATION_GLYPH;
+            }
+            else if (tk == T_LEFT_BRACKET) // Missing result, start next game
+            {
+                if (end - moves) // Force RESULT
+                    parse_game(moves, end, kTable);
+                gameCnt++;
+                state = HEADER;
+                end = curMove = moves;
+
+                *stateSp++ = state; // Force TAG
+                state = TAG;
             }
             else
                 error("Wrong black move", data);
