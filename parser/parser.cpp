@@ -82,12 +82,12 @@ struct Stats {
 };
 
 enum State {
-    BOM, HEADER, TAG, BRACE_COMMENT, NUMERIC_ANNOTATION_GLYPH, VARIATION,
+    BOM, HEADER, TAG, FEN_TAG, BRACE_COMMENT, NUMERIC_ANNOTATION_GLYPH, VARIATION,
     MOVE_NUMBER, WHITE_MOVE, BLACK_MOVE, RESULT
 };
 
 enum Token {
-    T_NONE, T_SPACES, T_DOT, T_DOLLAR, T_RESULT, T_DIGIT, T_MOVE,
+    T_NONE, T_SPACES, T_DOT, T_QUOTES, T_DOLLAR, T_RESULT, T_DIGIT, T_MOVE,
     T_LEFT_BRACKET, T_RIGHT_BRACKET, T_LEFT_BRACE, T_RIGHT_BRACE,
     T_LEFT_PARENTHESIS, T_RIGHT_PARENTHESIS
 };
@@ -146,7 +146,7 @@ void unmap(void* baseAddress, uint64_t mapping) {
 
 void error(const std::string& desc, const char* data) {
 
-    std::string what = std::string(data, 10);
+    std::string what = std::string(data, 50);
     std::cerr << desc << ": '" << what << "' " << std::endl;
     exit(0);
 }
@@ -229,11 +229,15 @@ inline PMove to_polyglot(Move m) {
     return PMove(m & 0x3FFF);
 }
 
-void parse_game(const char* moves, const char* end, Keys& kTable) {
+void parse_game(const char* moves, const char* end, Keys& kTable,
+                const char* fen, const char* fenEnd) {
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
     const char *cur = moves, *next = moves;
+
+    if (fenEnd != fen)
+        pos.set(fen, false, st++);
 
     while (true)
     {
@@ -260,8 +264,8 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
     int state = BOM;
     int stateStack[16], *stateSp = stateStack;
-    char moves[1024 * 8] = {};
-    char* curMove = moves;
+    char fen[256], *fenEnd = fen;
+    char moves[1024 * 8], *curMove = moves;
     char* end = curMove;
     size_t moveCnt = 0, gameCnt = 0;
     char* data = (char*)baseAddress;
@@ -288,7 +292,12 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             if (tk == T_LEFT_BRACKET)
             {
                 *stateSp++ = state;
-                state = TAG;
+                state =   *(  data + 1) == 'F'
+                       && *(++data + 1) == 'E'
+                       && *(++data + 1) == 'N'
+                       && *(++data + 1) == ' '
+                       && *(++data + 1) == '"'
+                       &&   ++data ? FEN_TAG : TAG;
             }
             else if (tk == T_DIGIT)
                 state = MOVE_NUMBER;
@@ -311,6 +320,16 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
             else if (tk == T_LEFT_BRACKET) // Nested bracket in a tag
                 *stateSp++ = state;
+            break;
+
+        case FEN_TAG:
+            if (tk == T_QUOTES) // Starting quotes have been consumed in HEADER
+            {
+                *fenEnd++ = 0; // Zero-terminating string
+                state = TAG;
+            }
+            else
+                *fenEnd++ = *data;
             break;
 
         case BRACE_COMMENT:
@@ -368,10 +387,11 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             else if (tk == T_LEFT_BRACKET) // Missing result, start next game
             {
                 if (end - moves) // Force RESULT
-                    parse_game(moves, end, kTable);
+                    parse_game(moves, end, kTable, fen, fenEnd);
                 gameCnt++;
                 state = HEADER;
                 end = curMove = moves;
+                fenEnd = fen;
 
                 *stateSp++ = state; // Force TAG
                 state = TAG;
@@ -409,6 +429,9 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 state =  tk == T_LEFT_BRACE       ? BRACE_COMMENT
                        : tk == T_LEFT_PARENTHESIS ? VARIATION : NUMERIC_ANNOTATION_GLYPH;
             }
+            else if (tk == T_DOT && end == curMove) // Game starts with black to
+                state = BLACK_MOVE;                 // move as with FEN
+
             else
                 error("Wrong white move", data);
             break;
@@ -445,10 +468,11 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             else if (tk == T_LEFT_BRACKET) // Missing result, start next game
             {
                 if (end - moves) // Force RESULT
-                    parse_game(moves, end, kTable);
+                    parse_game(moves, end, kTable, fen, fenEnd);
                 gameCnt++;
                 state = HEADER;
                 end = curMove = moves;
+                fenEnd = fen;
 
                 *stateSp++ = state; // Force TAG
                 state = TAG;
@@ -461,10 +485,11 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             if (tk == T_SPACES)
             {
                 if (end - moves)
-                    parse_game(moves, end, kTable);
+                    parse_game(moves, end, kTable, fen, fenEnd);
                 gameCnt++;
                 state = HEADER;
                 end = curMove = moves;
+                fenEnd = fen;
             }
             break;
 
@@ -492,6 +517,7 @@ void init() {
     ToToken['!'] = ToToken['?'] = T_SPACES;
     ToToken['/'] = ToToken['-'] = ToToken['*'] = T_RESULT;
     ToToken['.'] = T_DOT;
+    ToToken['"'] = T_QUOTES;
     ToToken['$'] = T_DOLLAR;
     ToToken['['] = T_LEFT_BRACKET;
     ToToken[']'] = T_RIGHT_BRACKET;
