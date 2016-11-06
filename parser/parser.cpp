@@ -421,8 +421,11 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 state = RESULT;
 
             else if (tk == T_DIGIT && end == curMove) // Can be a result
-                continue;
-
+            {
+                // Check for castle with zero instead of big O
+                if (data[0] == '0' && data[1] == '-' && data[2] == '0')
+                    *end++ = *data;
+            }
             else if (tk == T_LEFT_BRACE || tk == T_LEFT_PARENTHESIS || tk == T_DOLLAR)
             {
                 *stateSp++ = state;
@@ -456,9 +459,12 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             else if (tk == T_RESULT)
                 state = RESULT;
 
-            else if ((tk == T_DIGIT || tk == T_DOT) && end == curMove)
-                continue; // Like 4... exd5 5. Bg2
-
+            else if ((tk == T_DIGIT || tk == T_DOT) && end == curMove) // Like 4... exd5 5. Bg2
+            {
+                // Check for castle with zero instead of big O
+                if (data[0] == '0' && data[1] == '-' && data[2] == '0')
+                    *end++ = *data;
+            }
             else if (tk == T_LEFT_BRACE || tk == T_LEFT_PARENTHESIS || tk == T_DOLLAR)
             {
                 *stateSp++ = state;

@@ -890,8 +890,12 @@ bool Position::move_is_san(Move m, const char* ref) const {
 
   if (type_of(m) == CASTLING)
   {
-      int last = to > from ? 3 : 5;
-      int cmp = to > from ? strncmp(ref, "O-O", 3) : strncmp(ref, "O-O-O", 5);
+      int cmp, last = to > from ? 3 : 5;
+      if (ref[0] == '0')
+          cmp = to > from ? strncmp(ref, "0-0", 3) : strncmp(ref, "0-0-0", 5);
+      else
+          cmp = to > from ? strncmp(ref, "O-O", 3) : strncmp(ref, "O-O-O", 5);
+
       return !cmp && (ref[last] == '\0' || ref[last] == '+' || ref[last] == '#');
   }
   else
@@ -1012,6 +1016,7 @@ Move Position::san_to_move(const char* san) const {
       break;
 
   case 'O':
+  case '0':
       last = us == WHITE ? generate_castling_moves<WHITE, NON_EVASIONS, false>(*this, moveList)
                          : generate_castling_moves<BLACK, NON_EVASIONS, false>(*this, moveList);
       break;
