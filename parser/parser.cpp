@@ -79,6 +79,7 @@ inline bool operator<(const PolyEntry& f, const PolyEntry& s) {
 struct Stats {
     int64_t games;
     int64_t moves;
+    int64_t fixed;
 };
 
 enum State {
@@ -230,7 +231,7 @@ inline PMove to_polyglot(Move m) {
 }
 
 void parse_game(const char* moves, const char* end, Keys& kTable,
-                const char* fen, const char* fenEnd) {
+                const char* fen, const char* fenEnd, size_t& fixed ) {
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
@@ -243,7 +244,7 @@ void parse_game(const char* moves, const char* end, Keys& kTable,
     {
         while (*next++) {} // Go to next move
 
-        Move move = pos.san_to_move(cur);
+        Move move = pos.san_to_move(cur, fixed);
         if (!move)
         {
             std::string sep = pos.side_to_move() == WHITE ? "" : "..";
@@ -267,7 +268,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
     char fen[256], *fenEnd = fen;
     char moves[1024 * 8], *curMove = moves;
     char* end = curMove;
-    size_t moveCnt = 0, gameCnt = 0;
+    size_t moveCnt = 0, gameCnt = 0, fixed = 0;
     char* data = (char*)baseAddress;
     char* eof = data + size;
 
@@ -387,7 +388,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             else if (tk == T_LEFT_BRACKET) // Missing result, start next game
             {
                 if (end - moves) // Force RESULT
-                    parse_game(moves, end, kTable, fen, fenEnd);
+                    parse_game(moves, end, kTable, fen, fenEnd, fixed);
                 gameCnt++;
                 state = HEADER;
                 end = curMove = moves;
@@ -474,7 +475,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             else if (tk == T_LEFT_BRACKET) // Missing result, start next game
             {
                 if (end - moves) // Force RESULT
-                    parse_game(moves, end, kTable, fen, fenEnd);
+                    parse_game(moves, end, kTable, fen, fenEnd, fixed);
                 gameCnt++;
                 state = HEADER;
                 end = curMove = moves;
@@ -491,7 +492,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             if (tk == T_SPACES)
             {
                 if (end - moves)
-                    parse_game(moves, end, kTable, fen, fenEnd);
+                    parse_game(moves, end, kTable, fen, fenEnd, fixed);
                 gameCnt++;
                 state = HEADER;
                 end = curMove = moves;
@@ -506,6 +507,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
     stats.games = gameCnt;
     stats.moves = moveCnt;
+    stats.fixed = fixed;
 }
 
 } // namespace
@@ -590,6 +592,7 @@ void process_pgn(const char* fname) {
     std::cerr << "done\n"
               << "\nGames: " << stats.games
               << "\nMoves: " << stats.moves
+              << "\nIncorrect moves: " << stats.fixed
               << "\nUnique positions: " << 100 * uniqueKeys / stats.moves << "%"
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed

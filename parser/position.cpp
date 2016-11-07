@@ -918,7 +918,8 @@ bool Position::move_is_san(Move m, const char* ref) const {
           if (!others)
           { /* Disambiguation is not needed */ }
 
-          else if (!(others & file_bb(from)))
+          else if (  !(others & file_bb(from))
+                   && (Strict || (ref[1] > '8'))) // Check for wrong row disambiguation
               *san++ = char('a' + file_of(from));
 
           else if (!(others & rank_bb(from)))
@@ -984,7 +985,7 @@ static inline Bitboard trimPawn(Bitboard target, const char* san, bool isCapture
   return target;
 }
 
-Move Position::san_to_move(const char* san) const {
+Move Position::san_to_move(const char* san, size_t& fixed) const {
 
   ExtMove moveList[MAX_MOVES];
   ExtMove* last;
@@ -1039,6 +1040,8 @@ Move Position::san_to_move(const char* san) const {
       if (move_is_san(m->move, san) && legal(m->move))
           return m->move;
 
+  fixed++;
+
   // Retry with disambiguation rule relaxed, this is slow path anyhow
   for (ExtMove* m = moveList; m < last; ++m)
       if (move_is_san<false>(m->move, san) && legal(m->move))
@@ -1050,6 +1053,8 @@ Move Position::san_to_move(const char* san) const {
       for (const ExtMove& m : MoveList<PSEUDO_LEGAL>(*this))
           if (move_is_san<false>(m.move, san) && legal(m.move))
               return m.move;
+
+  fixed--; // No able to fix...
 
   return MOVE_NONE;
 }
