@@ -82,18 +82,26 @@ struct Stats {
     int64_t fixed;
 };
 
-enum State {
-    BOM, HEADER, TAG, FEN_TAG, BRACE_COMMENT, NUMERIC_ANNOTATION_GLYPH, VARIATION,
-    MOVE_NUMBER, WHITE_MOVE, BLACK_MOVE, RESULT
+enum Token {
+    T_NONE, T_SPACES, T_RESULT, T_DOT, T_QUOTES, T_DOLLAR, T_LEFT_BRACKET,
+    T_RIGHT_BRACKET, T_LEFT_BRACE, T_RIGHT_BRACE, T_LEFT_PARENTHESIS,
+    T_RIGHT_PARENTHESIS, T_ZERO, T_DIGIT, T_MOVE, TOKEN_NB
 };
 
-enum Token {
-    T_NONE, T_SPACES, T_DOT, T_QUOTES, T_DOLLAR, T_RESULT, T_DIGIT, T_MOVE,
-    T_LEFT_BRACKET, T_RIGHT_BRACKET, T_LEFT_BRACE, T_RIGHT_BRACE,
-    T_LEFT_PARENTHESIS, T_RIGHT_PARENTHESIS
+enum State {
+    HEADER, TAG, FEN_TAG, BRACE_COMMENT, VARIATION, NUMERIC_ANNOTATION_GLYPH,
+    NEXT_MOVE, MOVE_NUMBER, NEXT_SAN, READ_SAN, RESULT, STATE_NB
+};
+
+enum Step : uint8_t {
+    ERROR, CONTINUE, OPEN_TAG, OPEN_BRACE_COMMENT, READ_FEN, CLOSE_FEN_TAG,
+    OPEN_VARIATION, START_NAG, POP_STATE, START_MOVE_NUMBER, START_NEXT_SAN,
+    CASTLE_OR_RESULT, START_READ_SAN, READ_MOVE_CHAR, END_MOVE, START_RESULT,
+    END_GAME, MISSING_RESULT
 };
 
 Token ToToken[256];
+Step ToStep[STATE_NB][TOKEN_NB];
 Position RootPos;
 
 void map(const char* fname, void** baseAddress, uint64_t* mapping, size_t* size) {
@@ -145,10 +153,16 @@ void unmap(void* baseAddress, uint64_t mapping) {
 #endif
 }
 
-void error(const std::string& desc, const char* data) {
+void error(int state, const char* data) {
 
+    std::vector<std::string> stateDesc = {
+        "HEADER", "TAG", "FEN_TAG", "BRACE_COMMENT", "VARIATION",
+        "NUMERIC_ANNOTATION_GLYPH", "NEXT_MOVE", "MOVE_NUMBER",
+        "NEXT_SAN", "READ_SAN", "RESULT"
+    };
     std::string what = std::string(data, 50);
-    std::cerr << desc << ": '" << what << "' " << std::endl;
+    std::cerr << "Wrong " << stateDesc[state] << ": '"
+              << what << "' " << std::endl;
     exit(0);
 }
 
@@ -263,7 +277,6 @@ void parse_game(const char* moves, const char* end, Keys& kTable,
 
 void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
-    int state = BOM;
     int stateStack[16], *stateSp = stateStack;
     char fen[256], *fenEnd = fen;
     char moves[1024 * 8], *curMove = moves;
@@ -271,236 +284,128 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
     size_t moveCnt = 0, gameCnt = 0, fixed = 0;
     char* data = (char*)baseAddress;
     char* eof = data + size;
+    int stm = WHITE;
+    int state = HEADER;
 
     for (  ; data < eof; ++data)
     {
         Token tk = ToToken[*(uint8_t*)data];
+        Step step = ToStep[state][tk];
 
-        switch (state)
+        switch (step)
         {
-        case BOM: // Some editors place UTF8 byte order mark at the beginning
-            if (tk == T_LEFT_BRACKET)
-            {
-                state = HEADER;
-                *stateSp++ = state; // Force TAG
-                state = TAG;
-            }
-            else if (tk == T_DIGIT)
-                state = MOVE_NUMBER;
+
+        case ERROR:
+            error(state, data);
             break;
 
-        case HEADER:
-            if (tk == T_LEFT_BRACKET)
-            {
-                *stateSp++ = state;
-                state =   *(  data + 1) == 'F'
-                       && *(++data + 1) == 'E'
-                       && *(++data + 1) == 'N'
-                       && *(++data + 1) == ' '
-                       && *(++data + 1) == '"'
-                       &&   ++data ? FEN_TAG : TAG;
-            }
-            else if (tk == T_DIGIT)
-                state = MOVE_NUMBER;
-
-            else if (tk == T_LEFT_BRACE)
-            {
-                *stateSp++ = state;
-                state = BRACE_COMMENT;
-            }
-            else if (tk == T_RESULT)
-                state = RESULT;
-
-            else if (tk != T_SPACES)
-                error("Wrong header", data);
+        case CONTINUE:
             break;
 
-        case TAG:
-            if (tk == T_RIGHT_BRACKET)
-                state = *(--stateSp);
+        case OPEN_TAG:
+            *stateSp++ = state;
+            state =   *(  data + 1) == 'F'
+                   && *(++data + 1) == 'E'
+                   && *(++data + 1) == 'N'
+                   && *(++data + 1) == ' '
+                   && *(++data + 1) == '"'
+                   &&   ++data ? FEN_TAG : TAG;
+          break;
 
-            else if (tk == T_LEFT_BRACKET) // Nested bracket in a tag
-                *stateSp++ = state;
+        case OPEN_BRACE_COMMENT:
+            *stateSp++ = state;
+            state = BRACE_COMMENT;
             break;
 
-        case FEN_TAG:
-            if (tk == T_QUOTES) // Starting quotes have been consumed in HEADER
-            {
-                *fenEnd++ = 0; // Zero-terminating string
-                state = TAG;
-            }
-            else
-                *fenEnd++ = *data;
+        case READ_FEN:
+            *fenEnd++ = *data;
             break;
 
-        case BRACE_COMMENT:
-            if (tk == T_RIGHT_BRACE)
-                state = *(--stateSp);
-
-            else if (tk == T_LEFT_BRACE) // Nested comment
-                *stateSp++ = state;
+        case CLOSE_FEN_TAG:
+            *fenEnd++ = 0; // Zero-terminating string
+            if (strstr(fen, " b "))
+                stm = BLACK;
+            state = TAG;
             break;
 
-        case VARIATION:
-            if (tk == T_RIGHT_PARENTHESIS)
-                state = *(--stateSp);
-
-            else if (tk == T_LEFT_PARENTHESIS) // Nested variation
-                *stateSp++ = state;
-
-            else if (tk == T_LEFT_BRACE) // Nested comment
-            {
-                *stateSp++ = state;
-                state = BRACE_COMMENT;
-            }
+        case OPEN_VARIATION:
+            *stateSp++ = state;
+            state = VARIATION;
             break;
 
-        case NUMERIC_ANNOTATION_GLYPH:
-            if (tk == T_DIGIT)
-                continue;
+       case START_NAG:
+            *stateSp++ = state;
+            state = NUMERIC_ANNOTATION_GLYPH;
+            break;
+
+        case POP_STATE:
             state = *(--stateSp);
             break;
 
-        case MOVE_NUMBER:
-            if (tk == T_DIGIT)
-                continue;
+       case START_MOVE_NUMBER:
+           state = MOVE_NUMBER;
+           break;
 
-            else if (tk == T_DOT)
-                state = WHITE_MOVE;
+        case START_NEXT_SAN:
+            state = NEXT_SAN;
+            break;
 
-            else if (tk == T_SPACES && end == curMove)
-                continue;
-
-            else if (tk == T_RESULT)
+       case CASTLE_OR_RESULT:
+           if (data[2] != '0')
+           {
                 state = RESULT;
-
-            else if (tk == T_LEFT_BRACE || tk == T_LEFT_PARENTHESIS || tk == T_DOLLAR)
-            {
-                *stateSp++ = state;
-                state =  tk == T_LEFT_BRACE       ? BRACE_COMMENT
-                       : tk == T_LEFT_PARENTHESIS ? VARIATION : NUMERIC_ANNOTATION_GLYPH;
-            }
-            else if (tk == T_MOVE) // This can happen when dot is missing, like: 1 e4 e5 2 Nf3 Nc6
-            {
-                state = WHITE_MOVE;
-                *end++ = *data;
-            }
-            else if (tk == T_LEFT_BRACKET) // Missing result, start next game
-            {
-                if (end - moves) // Force RESULT
-                    parse_game(moves, end, kTable, fen, fenEnd, fixed);
-                gameCnt++;
-                state = HEADER;
-                end = curMove = moves;
-                fenEnd = fen;
-
-                *stateSp++ = state; // Force TAG
-                state = TAG;
-            }
-            else
-                error("Wrong move number", data);
-            break;
-
-        case WHITE_MOVE:
-            if (tk == T_MOVE || (tk == T_DIGIT && end != curMove))
-                *end++ = *data;
-
-            else if (tk == T_SPACES && end == curMove)
                 continue;
+           }
+           /* Fall through */
 
-            else if (tk == T_SPACES && end != curMove)
-            {
-                state = BLACK_MOVE;
-                *end++ = 0; // Zero-terminating string
-                curMove = end;
-                moveCnt++;
-            }
-            else if (*data == '-' && end != curMove) // Castling: '-' is also a result
-                *end++ = *data;
+       case START_READ_SAN:
+           *end++ = *data;
+           state = READ_SAN;
+           break;
 
-            else if (tk == T_RESULT)
-                state = RESULT;
-
-            else if (tk == T_DIGIT && end == curMove) // Can be a result
-            {
-                // Check for castle with zero instead of big O
-                if (data[0] == '0' && data[1] == '-' && data[2] == '0')
-                    *end++ = *data;
-            }
-            else if (tk == T_LEFT_BRACE || tk == T_LEFT_PARENTHESIS || tk == T_DOLLAR)
-            {
-                *stateSp++ = state;
-                state =  tk == T_LEFT_BRACE       ? BRACE_COMMENT
-                       : tk == T_LEFT_PARENTHESIS ? VARIATION : NUMERIC_ANNOTATION_GLYPH;
-            }
-            else if (tk == T_DOT && end == curMove) // Game starts with black to
-                state = BLACK_MOVE;                 // move as with FEN
-
-            else
-                error("Wrong white move", data);
+        case READ_MOVE_CHAR:
+            *end++ = *data;
             break;
 
-        case BLACK_MOVE:
-            if (tk == T_MOVE || (tk == T_DIGIT && end != curMove))
-                *end++ = *data;
-
-            else if (tk == T_SPACES && end == curMove)
-                continue;
-
-            else if (tk == T_SPACES && end != curMove)
-            {
-                state = MOVE_NUMBER;
-                *end++ = 0; // Zero-terminating string
-                curMove = end;
-                moveCnt++;
-            }
-            else if (*data == '-' && end != curMove) // Castling: '-' is also a result
-                *end++ = *data;
-
-            else if (tk == T_RESULT)
-                state = RESULT;
-
-            else if ((tk == T_DIGIT || tk == T_DOT) && end == curMove) // Like 4... exd5 5. Bg2
-            {
-                // Check for castle with zero instead of big O
-                if (data[0] == '0' && data[1] == '-' && data[2] == '0')
-                    *end++ = *data;
-            }
-            else if (tk == T_LEFT_BRACE || tk == T_LEFT_PARENTHESIS || tk == T_DOLLAR)
-            {
-                *stateSp++ = state;
-                state =  tk == T_LEFT_BRACE       ? BRACE_COMMENT
-                       : tk == T_LEFT_PARENTHESIS ? VARIATION : NUMERIC_ANNOTATION_GLYPH;
-            }
-            else if (tk == T_LEFT_BRACKET) // Missing result, start next game
-            {
-                if (end - moves) // Force RESULT
-                    parse_game(moves, end, kTable, fen, fenEnd, fixed);
-                gameCnt++;
-                state = HEADER;
-                end = curMove = moves;
-                fenEnd = fen;
-
-                *stateSp++ = state; // Force TAG
-                state = TAG;
-            }
-            else
-                error("Wrong black move", data);
+        case END_MOVE:
+            *end++ = 0; // Zero-terminating string
+//            std::cerr << curMove << std::endl;
+            curMove = end;
+            moveCnt++;
+            state = stm == WHITE ? NEXT_SAN : NEXT_MOVE;
+            stm ^= 1;
             break;
 
-        case RESULT:
-            if (tk == T_SPACES)
-            {
-                if (end - moves)
-                    parse_game(moves, end, kTable, fen, fenEnd, fixed);
-                gameCnt++;
-                state = HEADER;
-                end = curMove = moves;
-                fenEnd = fen;
-            }
+        case START_RESULT:
+            state = RESULT;
             break;
+
+        case END_GAME:
+            if (end - moves)
+                parse_game(moves, end, kTable, fen, fenEnd, fixed);
+            gameCnt++;
+            end = curMove = moves;
+            fenEnd = fen;
+            state = HEADER;
+            stm = WHITE;
+//            std::cerr << "\nEND GAME\n" << std::endl;
+            break;
+
+       case MISSING_RESULT: // Missing result, next game already started
+           if (end - moves)
+               parse_game(moves, end, kTable, fen, fenEnd, fixed);
+           gameCnt++;
+           end = curMove = moves;
+           fenEnd = fen;
+           state = HEADER;
+           stm = WHITE;
+
+           *stateSp++ = state; // Fast forward into a TAG
+           state = TAG;
+           break;
 
         default:
+            assert(false);
             break;
         }
     }
@@ -533,7 +438,8 @@ void init() {
     ToToken['}'] = T_RIGHT_BRACE;
     ToToken['('] = T_LEFT_PARENTHESIS;
     ToToken[')'] = T_RIGHT_PARENTHESIS;
-    ToToken['0'] = ToToken['1'] = ToToken['2'] = ToToken['3'] =
+    ToToken['0'] = T_ZERO;
+    ToToken['1'] = ToToken['2'] = ToToken['3'] =
     ToToken['4'] = ToToken['5'] = ToToken['6'] = ToToken['7'] =
     ToToken['8'] = ToToken['9'] = T_DIGIT;
     ToToken['a'] = ToToken['b'] = ToToken['c'] = ToToken['d'] =
@@ -541,6 +447,121 @@ void init() {
     ToToken['N'] = ToToken['B'] = ToToken['R'] = ToToken['Q'] =
     ToToken['K'] = ToToken['x'] = ToToken['+'] = ToToken['#'] =
     ToToken['='] = ToToken['O'] = T_MOVE;
+
+    // STATE = HEADER
+    //
+    // Between tags, before game starts. Accept anything
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[HEADER][i] = CONTINUE;
+
+    ToStep[HEADER][T_LEFT_BRACKET] = OPEN_TAG;
+    ToStep[HEADER][T_LEFT_BRACE  ] = OPEN_BRACE_COMMENT;
+    ToStep[HEADER][T_DIGIT       ] = START_MOVE_NUMBER;
+    ToStep[HEADER][T_RESULT      ] = START_RESULT;
+
+    // STATE = TAG
+    //
+    // Between brackets in header section, generic tag
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[TAG][i] = CONTINUE;
+
+    ToStep[TAG][T_RIGHT_BRACKET] = POP_STATE;
+    ToStep[TAG][T_LEFT_BRACKET ] = OPEN_TAG; // Nested bracket in a tag
+
+    // STATE = FEN_TAG
+    //
+    // Special tag to pass a position FEN
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[FEN_TAG][i] = READ_FEN;
+
+    ToStep[FEN_TAG][T_QUOTES] = CLOSE_FEN_TAG;
+
+
+    // STATE = BRACE_COMMENT
+    //
+    // Comment in braces, can appear almost everywhere
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[BRACE_COMMENT][i] = CONTINUE;
+
+    ToStep[BRACE_COMMENT][T_RIGHT_BRACE] = POP_STATE;
+    ToStep[BRACE_COMMENT][T_LEFT_BRACE ] = OPEN_BRACE_COMMENT; // Nested
+
+    // STATE = VARIATION
+    //
+    // For the moment variations are simply ignored
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[VARIATION][i] = CONTINUE;
+
+    ToStep[VARIATION][T_RIGHT_PARENTHESIS] = POP_STATE;
+    ToStep[VARIATION][T_LEFT_PARENTHESIS ] = OPEN_VARIATION; // Nested
+    ToStep[VARIATION][T_LEFT_BRACE       ] = OPEN_BRACE_COMMENT;
+
+    // STATE = NUMERIC_ANNOTATION_GLYPH
+    //
+    // Just read a single number
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[NUMERIC_ANNOTATION_GLYPH][i] = POP_STATE;
+
+    ToStep[NUMERIC_ANNOTATION_GLYPH][T_ZERO ] = CONTINUE;
+    ToStep[NUMERIC_ANNOTATION_GLYPH][T_DIGIT] = CONTINUE;
+
+    // STATE = NEXT_MOVE
+    //
+    // Check for the beginning of the move number
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[NEXT_MOVE][i] = CONTINUE;
+
+    ToStep[NEXT_MOVE][T_LEFT_PARENTHESIS] = OPEN_VARIATION;
+    ToStep[NEXT_MOVE][T_LEFT_BRACE      ] = OPEN_BRACE_COMMENT;
+    ToStep[NEXT_MOVE][T_LEFT_BRACKET    ] = MISSING_RESULT;
+    ToStep[NEXT_MOVE][T_DOLLAR          ] = START_NAG;
+    ToStep[NEXT_MOVE][T_RESULT          ] = START_RESULT;
+    ToStep[NEXT_MOVE][T_DOT             ] = ERROR;
+    ToStep[NEXT_MOVE][T_MOVE            ] = ERROR;
+    ToStep[NEXT_MOVE][T_DIGIT           ] = START_MOVE_NUMBER;
+
+    // STATE = MOVE_NUMBER
+    //
+    // Continue until a dot is found, to tolerate missing dots,
+    // stop at first space, then start NEXT_SAN that will handle
+    // head trailing spaces. We can alias with a result.
+    ToStep[MOVE_NUMBER][T_ZERO  ] = CONTINUE;
+    ToStep[MOVE_NUMBER][T_DIGIT ] = CONTINUE;
+    ToStep[MOVE_NUMBER][T_RESULT] = START_RESULT;
+    ToStep[MOVE_NUMBER][T_SPACES] = START_NEXT_SAN;
+    ToStep[MOVE_NUMBER][T_DOT   ] = START_NEXT_SAN;
+
+    // STATE = NEXT_SAN
+    //
+    // Check for the beginning of the move SAN
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[NEXT_SAN][i] = CONTINUE;
+
+    ToStep[NEXT_SAN][T_LEFT_PARENTHESIS] = OPEN_VARIATION;
+    ToStep[NEXT_SAN][T_LEFT_BRACE      ] = OPEN_BRACE_COMMENT;
+    ToStep[NEXT_SAN][T_LEFT_BRACKET    ] = MISSING_RESULT;
+    ToStep[NEXT_SAN][T_DOLLAR          ] = START_NAG;
+    ToStep[NEXT_SAN][T_RESULT          ] = START_RESULT;
+    ToStep[NEXT_SAN][T_DOT             ] = CONTINUE; // Like 4... exd5 5. Bg2
+    ToStep[NEXT_SAN][T_DIGIT           ] = START_MOVE_NUMBER; // Same as above
+    ToStep[NEXT_SAN][T_ZERO            ] = CASTLE_OR_RESULT; // 0-0, but also 0-1
+    ToStep[NEXT_SAN][T_MOVE            ] = START_READ_SAN;
+
+    // STATE = READ_SAN
+    //
+    // Just read a single move until a space is reched
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[READ_SAN][i] = READ_MOVE_CHAR;
+
+    ToStep[READ_SAN][T_SPACES] = END_MOVE;
+
+    // STATE = RESULT
+    //
+    // Just ignore anything until a space is reched
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[RESULT][i] = CONTINUE;
+
+    ToStep[RESULT][T_SPACES] = END_GAME;
 }
 
 void process_pgn(const char* fname) {
