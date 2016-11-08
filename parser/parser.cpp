@@ -153,16 +153,21 @@ void unmap(void* baseAddress, uint64_t mapping) {
 #endif
 }
 
-void error(int state, const char* data) {
+void error(Step* state, const char* data) {
 
     std::vector<std::string> stateDesc = {
         "HEADER", "TAG", "FEN_TAG", "BRACE_COMMENT", "VARIATION",
         "NUMERIC_ANNOTATION_GLYPH", "NEXT_MOVE", "MOVE_NUMBER",
         "NEXT_SAN", "READ_SAN", "RESULT"
     };
-    std::string what = std::string(data, 50);
-    std::cerr << "Wrong " << stateDesc[state] << ": '"
-              << what << "' " << std::endl;
+
+    for (int i = 0; i < STATE_NB; i++)
+        if (ToStep[i] == state)
+        {
+            std::string what = std::string(data, 50);
+            std::cerr << "Wrong " << stateDesc[i] << ": '"
+                      << what << "' " << std::endl;
+        }
     exit(0);
 }
 
@@ -277,7 +282,8 @@ void parse_game(const char* moves, const char* end, Keys& kTable,
 
 void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
-    int stateStack[16], *stateSp = stateStack;
+    Step* stateStack[16];
+    Step**stateSp = stateStack;
     char fen[256], *fenEnd = fen;
     char moves[1024 * 8], *curMove = moves;
     char* end = curMove;
@@ -285,14 +291,13 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
     char* data = (char*)baseAddress;
     char* eof = data + size;
     int stm = WHITE;
-    int state = HEADER;
+    Step* state = ToStep[HEADER];
 
     for (  ; data < eof; ++data)
     {
         Token tk = ToToken[*(uint8_t*)data];
-        Step step = ToStep[state][tk];
 
-        switch (step)
+        switch (state[tk])
         {
 
         case ERROR:
@@ -309,12 +314,12 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                    && *(++data + 1) == 'N'
                    && *(++data + 1) == ' '
                    && *(++data + 1) == '"'
-                   &&   ++data ? FEN_TAG : TAG;
+                   &&   ++data ? ToStep[FEN_TAG] : ToStep[TAG];
           break;
 
         case OPEN_BRACE_COMMENT:
             *stateSp++ = state;
-            state = BRACE_COMMENT;
+            state = ToStep[BRACE_COMMENT];
             break;
 
         case READ_FEN:
@@ -325,17 +330,17 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             *fenEnd++ = 0; // Zero-terminating string
             if (strstr(fen, " b "))
                 stm = BLACK;
-            state = TAG;
+            state = ToStep[TAG];
             break;
 
         case OPEN_VARIATION:
             *stateSp++ = state;
-            state = VARIATION;
+            state = ToStep[VARIATION];
             break;
 
        case START_NAG:
             *stateSp++ = state;
-            state = NUMERIC_ANNOTATION_GLYPH;
+            state = ToStep[NUMERIC_ANNOTATION_GLYPH];
             break;
 
         case POP_STATE:
@@ -343,24 +348,24 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             break;
 
        case START_MOVE_NUMBER:
-           state = MOVE_NUMBER;
+           state = ToStep[MOVE_NUMBER];
            break;
 
         case START_NEXT_SAN:
-            state = NEXT_SAN;
+            state = ToStep[NEXT_SAN];
             break;
 
        case CASTLE_OR_RESULT:
            if (data[2] != '0')
            {
-                state = RESULT;
+                state = ToStep[RESULT];
                 continue;
            }
            /* Fall through */
 
        case START_READ_SAN:
            *end++ = *data;
-           state = READ_SAN;
+           state = ToStep[READ_SAN];
            break;
 
         case READ_MOVE_CHAR:
@@ -372,12 +377,12 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 //            std::cerr << curMove << std::endl;
             curMove = end;
             moveCnt++;
-            state = stm == WHITE ? NEXT_SAN : NEXT_MOVE;
+            state = ToStep[stm == WHITE ? NEXT_SAN : NEXT_MOVE];
             stm ^= 1;
             break;
 
         case START_RESULT:
-            state = RESULT;
+            state = ToStep[RESULT];
             break;
 
         case END_GAME:
@@ -386,7 +391,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             gameCnt++;
             end = curMove = moves;
             fenEnd = fen;
-            state = HEADER;
+            state = ToStep[HEADER];
             stm = WHITE;
 //            std::cerr << "\nEND GAME\n" << std::endl;
             break;
@@ -397,11 +402,11 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
            gameCnt++;
            end = curMove = moves;
            fenEnd = fen;
-           state = HEADER;
+           state = ToStep[HEADER];
            stm = WHITE;
 
            *stateSp++ = state; // Fast forward into a TAG
-           state = TAG;
+           state = ToStep[TAG];
            break;
 
         default:
