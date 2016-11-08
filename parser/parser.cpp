@@ -48,16 +48,15 @@ typedef uint64_t PKey;  // Polyglot key
 typedef uint16_t PMove; // Polyglot move
 
 /*
- * A Polyglot book is a series of "entries" of 16 bytes
+   A Polyglot book is a series of "entries" of 16 bytes:
 
-key    uint64
-move   uint16
-weight uint16
-learn  uint32
+    key    uint64
+    move   uint16
+    weight uint16
+    learn  uint32
 
-All integers are stored highest byte first (regardless of size)
-
-The entries are ordered according to key. Lowest key first.
+   All integers are stored highest byte first (regardless of size). The entries
+   are ordered according to key. Lowest key first.
 */
 
 struct PolyEntry {
@@ -66,11 +65,10 @@ struct PolyEntry {
     uint16_t weight;
     uint32_t learn;
 };
-
-// Acvoid alignment issues with sizeof(PolyEntry)
-const size_t SizeOfPolyEntry = sizeof(PKey) + sizeof(PMove) + sizeof(uint16_t) + sizeof(uint32_t);
-
 typedef std::vector<PolyEntry> Keys;
+
+// Avoid alignment issues with sizeof(PolyEntry)
+const size_t SizeOfPolyEntry = sizeof(PKey) + sizeof(PMove) + sizeof(uint16_t) + sizeof(uint32_t);
 
 inline bool operator<(const PolyEntry& f, const PolyEntry& s) {
     return f.key  < s.key;
@@ -94,7 +92,7 @@ enum State {
 };
 
 enum Step : uint8_t {
-    ERROR, CONTINUE, OPEN_TAG, OPEN_BRACE_COMMENT, READ_FEN, CLOSE_FEN_TAG,
+    FAIL, CONTINUE, OPEN_TAG, OPEN_BRACE_COMMENT, READ_FEN, CLOSE_FEN_TAG,
     OPEN_VARIATION, START_NAG, POP_STATE, START_MOVE_NUMBER, START_NEXT_SAN,
     CASTLE_OR_RESULT, START_READ_SAN, READ_MOVE_CHAR, END_MOVE, START_RESULT,
     END_GAME, MISSING_RESULT
@@ -113,8 +111,8 @@ void map(const char* fname, void** baseAddress, uint64_t* mapping, size_t* size)
     *mapping = *size = statbuf.st_size;
     *baseAddress = mmap(nullptr, statbuf.st_size, PROT_READ, MAP_SHARED, fd, 0);
     ::close(fd);
-
-    if (*baseAddress == MAP_FAILED) {
+    if (*baseAddress == MAP_FAILED)
+    {
         std::cerr << "Could not mmap() " << fname << std::endl;
         exit(1);
     }
@@ -125,17 +123,16 @@ void map(const char* fname, void** baseAddress, uint64_t* mapping, size_t* size)
     DWORD size_low = GetFileSize(fd, &size_high);
     HANDLE mmap = CreateFileMapping(fd, nullptr, PAGE_READONLY, size_high, size_low, nullptr);
     CloseHandle(fd);
-
-    if (!mmap) {
+    if (!mmap)
+    {
         std::cerr << "CreateFileMapping() failed" << std::endl;
         exit(1);
     }
-
     *size = ((size_t)size_high << 32) | (size_t)size_low;
     *mapping = (uint64_t)mmap;
     *baseAddress = MapViewOfFile(mmap, FILE_MAP_READ, 0, 0, 0);
-
-    if (!*baseAddress) {
+    if (!*baseAddress)
+    {
         std::cerr << "MapViewOfFile() failed, name = " << fname
                   << ", error = " << GetLastError() << std::endl;
         exit(1);
@@ -171,23 +168,22 @@ void error(Step* state, const char* data) {
     exit(0);
 }
 
-/// Convert a number of type T into a sequence of bytes and write to file in
-/// big-endian format.
+/// Convert a number of type T into a sequence of bytes in big-endian format
 
 template<typename T> uint8_t* write(const T& n, uint8_t* data) {
 
-  for (int i =  8 * (sizeof(T) - 1); i >= 0; i -= 8, ++data)
-      *data = uint8_t(n >> i);
+    for (int i =  8 * (sizeof(T) - 1); i >= 0; i -= 8, ++data)
+        *data = uint8_t(n >> i);
 
-  return data;
+    return data;
 }
 
 template<> uint8_t* write(const PolyEntry& e, uint8_t* data) {
 
-  data = write(e.key, data);
-  data = write(e.move, data);
-  data = write(e.weight, data);
-  return write(e.learn, data);
+    data = write(e.key,    data);
+    data = write(e.move,   data);
+    data = write(e.weight, data);
+    return write(e.learn,  data);
 }
 
 size_t write_poly_file(const Keys& kTable, const std::string& fname) {
@@ -242,7 +238,6 @@ inline PMove to_polyglot(Move m) {
     // move is a promotion, we have to convert it to our representation and in
     // all other cases, we can directly compare with a Move after having masked
     // out the special Move flags (bit 14-15) that are not supported by PolyGlot.
-
     if (m & PROMOTION)
         return PMove((m & 0xFFF) | ((promotion_type(m) - 1) << 12));
 
@@ -264,13 +259,14 @@ void parse_game(const char* moves, const char* end, Keys& kTable,
         while (*next++) {} // Go to next move
 
         Move move = pos.san_to_move(cur, fixed);
-        if (!move)
+        if (move == MOVE_NONE)
         {
-            std::string sep = pos.side_to_move() == WHITE ? "" : "..";
-            std::cerr << "\nWrong move notation: " << sep << cur << "\n" << pos << std::endl;
+            const char* sep = pos.side_to_move() == WHITE ? "" : "..";
+            std::cerr << "\nWrong move notation: " << sep << cur
+                      << "\n" << pos << std::endl;
             break;
         }
-        else if (move == MOVE_NULL)
+        if (move == MOVE_NULL)
         {
             if (next == end)
                 break;
@@ -308,8 +304,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
         switch (state[tk])
         {
-
-        case ERROR:
+        case FAIL:
             error(state, data);
             break;
 
@@ -324,7 +319,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                    && *(++data + 1) == ' '
                    && *(++data + 1) == '"'
                    &&   ++data ? ToStep[FEN_TAG] : ToStep[TAG];
-          break;
+            break;
 
         case OPEN_BRACE_COMMENT:
             *stateSp++ = state;
@@ -337,9 +332,9 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
         case CLOSE_FEN_TAG:
             *fenEnd++ = 0; // Zero-terminating string
+            state = ToStep[TAG];
             if (strstr(fen, " b "))
                 stm = BLACK;
-            state = ToStep[TAG];
             break;
 
         case OPEN_VARIATION:
@@ -347,7 +342,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             state = ToStep[VARIATION];
             break;
 
-       case START_NAG:
+        case START_NAG:
             *stateSp++ = state;
             state = ToStep[NUMERIC_ANNOTATION_GLYPH];
             break;
@@ -356,26 +351,26 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             state = *(--stateSp);
             break;
 
-       case START_MOVE_NUMBER:
-           state = ToStep[MOVE_NUMBER];
-           break;
+        case START_MOVE_NUMBER:
+            state = ToStep[MOVE_NUMBER];
+            break;
 
         case START_NEXT_SAN:
             state = ToStep[NEXT_SAN];
             break;
 
-       case CASTLE_OR_RESULT:
-           if (data[2] != '0')
-           {
+        case CASTLE_OR_RESULT:
+            if (data[2] != '0')
+            {
                 state = ToStep[RESULT];
                 continue;
-           }
-           /* Fall through */
+            }
+            /* Fall through */
 
-       case START_READ_SAN:
-           *end++ = *data;
-           state = ToStep[READ_SAN];
-           break;
+        case START_READ_SAN:
+            *end++ = *data;
+            state = ToStep[READ_SAN];
+            break;
 
         case READ_MOVE_CHAR:
             *end++ = *data;
@@ -383,7 +378,6 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
         case END_MOVE:
             *end++ = 0; // Zero-terminating string
-//            std::cerr << curMove << std::endl;
             curMove = end;
             moveCnt++;
             state = ToStep[stm == WHITE ? NEXT_SAN : NEXT_MOVE];
@@ -402,21 +396,20 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             fenEnd = fen;
             state = ToStep[HEADER];
             stm = WHITE;
-//            std::cerr << "\nEND GAME\n" << std::endl;
             break;
 
-       case MISSING_RESULT: // Missing result, next game already started
-           if (end - moves)
-               parse_game(moves, end, kTable, fen, fenEnd, fixed);
-           gameCnt++;
-           end = curMove = moves;
-           fenEnd = fen;
-           state = ToStep[HEADER];
-           stm = WHITE;
+        case MISSING_RESULT: // Missing result, next game already started
+            if (end - moves)
+                parse_game(moves, end, kTable, fen, fenEnd, fixed);
+            gameCnt++;
+            end = curMove = moves;
+            fenEnd = fen;
+            state = ToStep[HEADER];
+            stm = WHITE;
 
-           *stateSp++ = state; // Fast forward into a TAG
-           state = ToStep[TAG];
-           break;
+            *stateSp++ = state; // Fast forward into a TAG
+            state = ToStep[TAG];
+            break;
 
         default:
             assert(false);
@@ -472,6 +465,7 @@ void init() {
     ToStep[HEADER][T_LEFT_BRACKET] = OPEN_TAG;
     ToStep[HEADER][T_LEFT_BRACE  ] = OPEN_BRACE_COMMENT;
     ToStep[HEADER][T_DIGIT       ] = START_MOVE_NUMBER;
+    ToStep[HEADER][T_ZERO        ] = START_RESULT;
     ToStep[HEADER][T_RESULT      ] = START_RESULT;
 
     // STATE = TAG
@@ -481,11 +475,11 @@ void init() {
         ToStep[TAG][i] = CONTINUE;
 
     ToStep[TAG][T_RIGHT_BRACKET] = POP_STATE;
-    ToStep[TAG][T_LEFT_BRACKET ] = OPEN_TAG; // Nested bracket in a tag
+    ToStep[TAG][T_LEFT_BRACKET ] = OPEN_TAG; // Nested brackets in a tag
 
     // STATE = FEN_TAG
     //
-    // Special tag to pass a position FEN
+    // Special tag to set a position from a FEN string
     for (int i = 0; i < TOKEN_NB; i++)
         ToStep[FEN_TAG][i] = READ_FEN;
 
@@ -503,7 +497,7 @@ void init() {
 
     // STATE = VARIATION
     //
-    // For the moment variations are simply ignored
+    // For the moment variations are ignored
     for (int i = 0; i < TOKEN_NB; i++)
         ToStep[VARIATION][i] = CONTINUE;
 
@@ -532,16 +526,16 @@ void init() {
     ToStep[NEXT_MOVE][T_DOLLAR          ] = START_NAG;
     ToStep[NEXT_MOVE][T_RESULT          ] = START_RESULT;
     ToStep[NEXT_MOVE][T_ZERO            ] = START_RESULT;
-    ToStep[NEXT_MOVE][T_DOT             ] = ERROR;
-    ToStep[NEXT_MOVE][T_MOVE            ] = ERROR;
-    ToStep[NEXT_MOVE][T_MINUS           ] = ERROR;
+    ToStep[NEXT_MOVE][T_DOT             ] = FAIL;
+    ToStep[NEXT_MOVE][T_MOVE            ] = FAIL;
+    ToStep[NEXT_MOVE][T_MINUS           ] = FAIL;
     ToStep[NEXT_MOVE][T_DIGIT           ] = START_MOVE_NUMBER;
 
     // STATE = MOVE_NUMBER
     //
     // Continue until a dot is found, to tolerate missing dots,
     // stop at first space, then start NEXT_SAN that will handle
-    // head trailing spaces. We can alias with a result.
+    // head trailing spaces. We can alias with a result like 1-0 or 1/2-1/2
     ToStep[MOVE_NUMBER][T_ZERO  ] = CONTINUE;
     ToStep[MOVE_NUMBER][T_DIGIT ] = CONTINUE;
     ToStep[MOVE_NUMBER][T_RESULT] = START_RESULT;
@@ -551,7 +545,7 @@ void init() {
 
     // STATE = NEXT_SAN
     //
-    // Check for the beginning of the move SAN
+    // Check for the beginning of the next move SAN
     for (int i = 0; i < TOKEN_NB; i++)
         ToStep[NEXT_SAN][i] = CONTINUE;
 
@@ -560,15 +554,15 @@ void init() {
     ToStep[NEXT_SAN][T_LEFT_BRACKET    ] = MISSING_RESULT;
     ToStep[NEXT_SAN][T_DOLLAR          ] = START_NAG;
     ToStep[NEXT_SAN][T_RESULT          ] = START_RESULT;
-    ToStep[NEXT_SAN][T_DOT             ] = CONTINUE; // Like 4... exd5 5. Bg2
+    ToStep[NEXT_SAN][T_ZERO            ] = CASTLE_OR_RESULT;  // 0-0 or 0-1
+    ToStep[NEXT_SAN][T_DOT             ] = CONTINUE;          // Like 4... exd5
     ToStep[NEXT_SAN][T_DIGIT           ] = START_MOVE_NUMBER; // Same as above
-    ToStep[NEXT_SAN][T_ZERO            ] = CASTLE_OR_RESULT; // 0-0, but also 0-1
     ToStep[NEXT_SAN][T_MOVE            ] = START_READ_SAN;
-    ToStep[NEXT_SAN][T_MINUS           ] = START_READ_SAN; // Null move "--"
+    ToStep[NEXT_SAN][T_MINUS           ] = START_READ_SAN;    // Null move "--"
 
     // STATE = READ_SAN
     //
-    // Just read a single move until a space is reached
+    // Just read a single move SAN until a space is reached
     for (int i = 0; i < TOKEN_NB; i++)
         ToStep[READ_SAN][i] = READ_MOVE_CHAR;
 
@@ -576,7 +570,7 @@ void init() {
 
     // STATE = RESULT
     //
-    // Just ignore anything until a space is reched
+    // Ignore anything until a space is reached
     for (int i = 0; i < TOKEN_NB; i++)
         ToStep[RESULT][i] = CONTINUE;
 
@@ -593,9 +587,9 @@ void process_pgn(const char* fname) {
     map(fname, &baseAddress, &mapping, &size);
 
     // Reserve enough capacity according to file size. This is a very crude
-    // estimation, mainly we assume key index to be of 2 times the size of
-    // the pgn file, and moves to be half size.
-    kTable.reserve(2 * size / sizeof(PolyEntry));
+    // estimation, mainly we assume key index to be of 1.5 times the size of
+    // the pgn file.
+    kTable.reserve(3 * size / 2 / sizeof(PolyEntry));
 
     std::cerr << "\nProcessing...";
 
@@ -614,7 +608,7 @@ void process_pgn(const char* fname) {
         if (kTable[idx].key != kTable[idx - 1].key)
         {
             if (idx - last > 2)
-               sort_by_frequency(kTable, last, idx);
+                sort_by_frequency(kTable, last, idx);
 
             last = idx;
             uniqueKeys++;
