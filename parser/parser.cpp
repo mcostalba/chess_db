@@ -83,9 +83,9 @@ struct Stats {
 };
 
 enum Token {
-    T_NONE, T_SPACES, T_RESULT, T_DOT, T_QUOTES, T_DOLLAR, T_LEFT_BRACKET,
-    T_RIGHT_BRACKET, T_LEFT_BRACE, T_RIGHT_BRACE, T_LEFT_PARENTHESIS,
-    T_RIGHT_PARENTHESIS, T_ZERO, T_DIGIT, T_MOVE, TOKEN_NB
+    T_NONE, T_SPACES, T_RESULT, T_MINUS, T_DOT, T_QUOTES, T_DOLLAR,
+    T_LEFT_BRACKET, T_RIGHT_BRACKET, T_LEFT_BRACE, T_RIGHT_BRACE,
+    T_LEFT_PARENTHESIS, T_RIGHT_PARENTHESIS, T_ZERO, T_DIGIT, T_MOVE, TOKEN_NB
 };
 
 enum State {
@@ -270,6 +270,15 @@ void parse_game(const char* moves, const char* end, Keys& kTable,
             std::cerr << "\nWrong move notation: " << sep << cur << "\n" << pos << std::endl;
             break;
         }
+        else if (move == MOVE_NULL)
+        {
+            if (next == end)
+                break;
+
+            pos.do_null_move(*st++);
+            cur = next;
+            continue;
+        }
 
         kTable.push_back({pos.key(), to_polyglot(move), 1, 0});
         if (next == end)
@@ -433,7 +442,8 @@ void init() {
 
     ToToken['\n'] = ToToken['\r'] = ToToken[' '] = ToToken['\t'] = T_SPACES;
     ToToken['!'] = ToToken['?'] = T_SPACES;
-    ToToken['/'] = ToToken['-'] = ToToken['*'] = T_RESULT;
+    ToToken['/'] = ToToken['*'] = T_RESULT;
+    ToToken['-'] = T_MINUS;
     ToToken['.'] = T_DOT;
     ToToken['"'] = T_QUOTES;
     ToToken['$'] = T_DOLLAR;
@@ -512,7 +522,7 @@ void init() {
 
     // STATE = NEXT_MOVE
     //
-    // Check for the beginning of the move number
+    // Check for the beginning of the next move number
     for (int i = 0; i < TOKEN_NB; i++)
         ToStep[NEXT_MOVE][i] = CONTINUE;
 
@@ -521,8 +531,10 @@ void init() {
     ToStep[NEXT_MOVE][T_LEFT_BRACKET    ] = MISSING_RESULT;
     ToStep[NEXT_MOVE][T_DOLLAR          ] = START_NAG;
     ToStep[NEXT_MOVE][T_RESULT          ] = START_RESULT;
+    ToStep[NEXT_MOVE][T_ZERO            ] = START_RESULT;
     ToStep[NEXT_MOVE][T_DOT             ] = ERROR;
     ToStep[NEXT_MOVE][T_MOVE            ] = ERROR;
+    ToStep[NEXT_MOVE][T_MINUS           ] = ERROR;
     ToStep[NEXT_MOVE][T_DIGIT           ] = START_MOVE_NUMBER;
 
     // STATE = MOVE_NUMBER
@@ -533,6 +545,7 @@ void init() {
     ToStep[MOVE_NUMBER][T_ZERO  ] = CONTINUE;
     ToStep[MOVE_NUMBER][T_DIGIT ] = CONTINUE;
     ToStep[MOVE_NUMBER][T_RESULT] = START_RESULT;
+    ToStep[MOVE_NUMBER][T_MINUS ] = START_RESULT;
     ToStep[MOVE_NUMBER][T_SPACES] = START_NEXT_SAN;
     ToStep[MOVE_NUMBER][T_DOT   ] = START_NEXT_SAN;
 
@@ -551,10 +564,11 @@ void init() {
     ToStep[NEXT_SAN][T_DIGIT           ] = START_MOVE_NUMBER; // Same as above
     ToStep[NEXT_SAN][T_ZERO            ] = CASTLE_OR_RESULT; // 0-0, but also 0-1
     ToStep[NEXT_SAN][T_MOVE            ] = START_READ_SAN;
+    ToStep[NEXT_SAN][T_MINUS           ] = START_READ_SAN; // Null move "--"
 
     // STATE = READ_SAN
     //
-    // Just read a single move until a space is reched
+    // Just read a single move until a space is reached
     for (int i = 0; i < TOKEN_NB; i++)
         ToStep[READ_SAN][i] = READ_MOVE_CHAR;
 

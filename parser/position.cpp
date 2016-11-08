@@ -875,6 +875,36 @@ void Position::do_castling(Color us, Square from, Square& to, Square& rfrom, Squ
 }
 
 
+/// Position::do(undo)_null_move() is used to do(undo) a "null move": It flips
+/// the side to move without executing any move on the board.
+
+void Position::do_null_move(StateInfo& newSt) {
+
+  assert(!checkers());
+  assert(&newSt != st);
+
+  std::memcpy(&newSt, st, sizeof(StateInfo));
+  newSt.previous = st;
+  st = &newSt;
+
+  if (st->epSquare != SQ_NONE)
+  {
+      st->key ^= Zobrist::enpassant[file_of(st->epSquare)];
+      st->epSquare = SQ_NONE;
+  }
+
+  st->key ^= Zobrist::side;
+
+  ++st->rule50;
+
+  sideToMove = ~sideToMove;
+
+  set_check_info(st);
+
+  assert(pos_is_ok());
+}
+
+
 /// Position::move_is_san() takes a legal Move and a san as input and returns true if equivalent
 template<bool Strict>
 bool Position::move_is_san(Move m, const char* ref) const {
@@ -1021,6 +1051,10 @@ Move Position::san_to_move(const char* san, size_t& fixed) const {
       last = us == WHITE ? generate_castling_moves<WHITE, NON_EVASIONS, false>(*this, moveList)
                          : generate_castling_moves<BLACK, NON_EVASIONS, false>(*this, moveList);
       break;
+
+  case '-':
+      assert(!strcmp(san, "--"));
+      return MOVE_NULL;
 
   default:
       assert(san[0] >= 'a' && san[0] <= 'h');
