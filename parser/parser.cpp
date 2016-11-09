@@ -507,12 +507,12 @@ void init() {
 
     // STATE = BRACE_COMMENT
     //
-    // Comment in braces, can appear almost everywhere
+    // Comment in braces, can appear almost everywhere. Note that brace comments
+    // do not nest according to PGN standard.
     for (int i = 0; i < TOKEN_NB; i++)
         ToStep[BRACE_COMMENT][i] = CONTINUE;
 
     ToStep[BRACE_COMMENT][T_RIGHT_BRACE] = POP_STATE;
-    ToStep[BRACE_COMMENT][T_LEFT_BRACE ] = OPEN_BRACE_COMMENT; // Nested
 
     // STATE = VARIATION
     //
