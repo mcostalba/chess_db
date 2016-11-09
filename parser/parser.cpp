@@ -245,8 +245,8 @@ inline PMove to_polyglot(Move m) {
 }
 
 template<bool DryRun = false>
-bool parse_game(const char* moves, const char* end, Keys& kTable,
-                const char* fen, const char* fenEnd, size_t& fixed ) {
+const char* parse_game(const char* moves, const char* end, Keys& kTable,
+                       const char* fen, const char* fenEnd, size_t& fixed ) {
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
@@ -269,7 +269,7 @@ bool parse_game(const char* moves, const char* end, Keys& kTable,
                           << "\n" << pos << std::endl;
 
             }
-            return false;
+            return cur;
         }
         if (move == MOVE_NULL)
         {
@@ -290,7 +290,7 @@ bool parse_game(const char* moves, const char* end, Keys& kTable,
         pos.do_move(move, *st++, pos.gives_check(move));
         cur = next;
     }
-    return true;
+    return end;
 }
 
 void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
@@ -432,7 +432,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
 } // namespace
 
-bool play_game(const Position& pos, Move move, const char* cur, const char* end) {
+const char* play_game(const Position& pos, Move move, const char* cur, const char* end) {
 
     size_t fixed;
     Keys k;
@@ -440,8 +440,7 @@ bool play_game(const Position& pos, Move move, const char* cur, const char* end)
     Position p = pos;
     p.do_move(move, st, pos.gives_check(move));
     while (*cur++) {} // Move to next move in game
-    return   cur < end
-          && parse_game<true>(cur, end, k, p.fen().c_str(), nullptr, fixed);
+    return cur < end ? parse_game<true>(cur, end, k, p.fen().c_str(), nullptr, fixed) : cur;
 }
 
 namespace Parser {

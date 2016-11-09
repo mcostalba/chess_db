@@ -32,7 +32,7 @@
 
 #include "polyglot.cpp"
 
-bool play_game(const Position& pos, Move move, const char* moves, const char* end);
+const char* play_game(const Position& pos, Move move, const char* moves, const char* end);
 
 using std::string;
 
@@ -1076,6 +1076,11 @@ Move Position::san_to_move(const char* cur, const char* end, size_t& fixed) cons
       if (move_is_san(m->move, cur) && legal(m->move))
           return m->move;
 
+  static bool strict = false;
+
+  if (strict)
+      return MOVE_NONE;
+
   fixed++;
 
   // Retry with disambiguation rule relaxed, this is slow path anyhow
@@ -1091,14 +1096,31 @@ Move Position::san_to_move(const char* cur, const char* end, size_t& fixed) cons
               return m.move;
 
   // Ok, still not fixed, let's try to deduce the move out of the context. Play
-  // the game with the remaining moves and check if only one candidate is valid.
-  std::vector<Move> candidates;
-  for (ExtMove* m = moveList; m < last; ++m)
-      if (legal(m->move) && play_game(*this, m->move, cur, end))
-          candidates.push_back(m->move);
+  // the game with the generated moves and check if only one candidate is valid.
+  //
+  // First step is to compute for each move how many plies we can play before
+  // a wrong move occurs. This should be done in strict mode to avoid complex
+  // artifacts.
+  typedef std::pair<Move, const char*> C;
+  std::vector<C> candidates;
 
-  if (candidates.size() == 1) // Only one possible continuation
-      return candidates[0];
+  strict = true;
+  for (ExtMove* m = moveList; m < last; ++m)
+      if (legal(m->move))
+          candidates.push_back(C{m->move, play_game(*this, m->move, cur, end)});
+  strict = false;
+
+  // Then we pick the move that survived the longest
+  auto it = std::max_element(candidates.begin(), candidates.end(),
+                            [cur](const C& a, const C& b) -> bool
+                            {
+                                return a.second - cur < b.second - cur;
+                            });
+
+  // If the best move is correct until the end we have finished, otherwise
+  // replay the game with relaxed checks.
+  if (it->second == end || play_game(*this, it->first, cur, end) == end)
+      return it->first;
 
   fixed--; // No able to fix...
 
