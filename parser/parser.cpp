@@ -244,7 +244,8 @@ inline PMove to_polyglot(Move m) {
     return PMove(m & 0x3FFF);
 }
 
-void parse_game(const char* moves, const char* end, Keys& kTable,
+template<bool DryRun = false>
+bool parse_game(const char* moves, const char* end, Keys& kTable,
                 const char* fen, const char* fenEnd, size_t& fixed ) {
 
     StateInfo states[1024], *st = states;
@@ -258,13 +259,17 @@ void parse_game(const char* moves, const char* end, Keys& kTable,
     {
         while (*next++) {} // Go to next move
 
-        Move move = pos.san_to_move(cur, fixed);
+        Move move = pos.san_to_move(cur, end, fixed);
         if (move == MOVE_NONE)
         {
-            const char* sep = pos.side_to_move() == WHITE ? "" : "..";
-            std::cerr << "\nWrong move notation: " << sep << cur
-                      << "\n" << pos << std::endl;
-            break;
+            if (!DryRun)
+            {
+                const char* sep = pos.side_to_move() == WHITE ? "" : "..";
+                std::cerr << "\nWrong move notation: " << sep << cur
+                          << "\n" << pos << std::endl;
+
+            }
+            return false;
         }
         if (move == MOVE_NULL)
         {
@@ -276,13 +281,16 @@ void parse_game(const char* moves, const char* end, Keys& kTable,
             continue;
         }
 
-        kTable.push_back({pos.key(), to_polyglot(move), 1, 0});
+        if (!DryRun)
+            kTable.push_back({pos.key(), to_polyglot(move), 1, 0});
+
         if (next == end)
             break;
 
         pos.do_move(move, *st++, pos.gives_check(move));
         cur = next;
     }
+    return true;
 }
 
 void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
@@ -423,6 +431,18 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 }
 
 } // namespace
+
+bool play_game(const Position& pos, Move move, const char* cur, const char* end) {
+
+    size_t fixed;
+    Keys k;
+    StateInfo st;
+    Position p = pos;
+    p.do_move(move, st, pos.gives_check(move));
+    while (*cur++) {} // Move to next move in game
+    return   cur < end
+          && parse_game<true>(cur, end, k, p.fen().c_str(), nullptr, fixed);
+}
 
 namespace Parser {
 

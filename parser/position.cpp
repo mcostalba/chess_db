@@ -32,6 +32,8 @@
 
 #include "polyglot.cpp"
 
+bool play_game(const Position& pos, Move move, const char* moves, const char* end);
+
 using std::string;
 
 namespace PSQT {
@@ -1015,35 +1017,35 @@ static inline Bitboard trimPawn(Bitboard target, const char* san, bool isCapture
   return target;
 }
 
-Move Position::san_to_move(const char* san, size_t& fixed) const {
+Move Position::san_to_move(const char* cur, const char* end, size_t& fixed) const {
 
   ExtMove moveList[MAX_MOVES];
   ExtMove* last;
   Color us = sideToMove;
 
-  bool isCapture = strchr(san, 'x');
+  bool isCapture = strchr(cur, 'x');
   Bitboard target = isCapture ? pieces(~us) : ~pieces();
 
-  switch (san[0]) {
+  switch (cur[0]) {
   case 'N':
-      last = generate_moves<KNIGHT, false>(*this, moveList, us, trim(target, san));
+      last = generate_moves<KNIGHT, false>(*this, moveList, us, trim(target, cur));
       break;
 
   case 'B':
-      last = generate_moves<BISHOP, false>(*this, moveList, us, trim(target, san));
+      last = generate_moves<BISHOP, false>(*this, moveList, us, trim(target, cur));
       break;
 
   case 'R':
-      last = generate_moves<ROOK , false>(*this, moveList, us, trim(target, san));
+      last = generate_moves<ROOK , false>(*this, moveList, us, trim(target, cur));
       break;
 
   case 'Q':
-      last = generate_moves<QUEEN, false>(*this, moveList, us, trim(target, san));
+      last = generate_moves<QUEEN, false>(*this, moveList, us, trim(target, cur));
       break;
 
   case 'K':
-        last = us == WHITE ? generate_king_moves<WHITE, NON_EVASIONS, false, false>(*this, moveList, trim(target, san))
-                           : generate_king_moves<BLACK, NON_EVASIONS, false, false>(*this, moveList, trim(target, san));
+        last = us == WHITE ? generate_king_moves<WHITE, NON_EVASIONS, false, false>(*this, moveList, trim(target, cur))
+                           : generate_king_moves<BLACK, NON_EVASIONS, false, false>(*this, moveList, trim(target, cur));
       break;
 
   case 'O':
@@ -1053,13 +1055,13 @@ Move Position::san_to_move(const char* san, size_t& fixed) const {
       break;
 
   case '-':
-      assert(!strcmp(san, "--"));
+      assert(!strcmp(cur, "--"));
       return MOVE_NULL;
 
   default:
-      assert(san[0] >= 'a' && san[0] <= 'h');
+      assert(cur[0] >= 'a' && cur[0] <= 'h');
 
-      target = trimPawn(target, san, isCapture);
+      target = trimPawn(target, cur, isCapture);
 
       if (isCapture)
           last = us == WHITE ? generate_pawn_moves<WHITE, CAPTURES>(*this, moveList, target)
@@ -1071,22 +1073,32 @@ Move Position::san_to_move(const char* san, size_t& fixed) const {
   }
 
   for (ExtMove* m = moveList; m < last; ++m)
-      if (move_is_san(m->move, san) && legal(m->move))
+      if (move_is_san(m->move, cur) && legal(m->move))
           return m->move;
 
   fixed++;
 
   // Retry with disambiguation rule relaxed, this is slow path anyhow
   for (ExtMove* m = moveList; m < last; ++m)
-      if (move_is_san<false>(m->move, san) && legal(m->move))
+      if (move_is_san<false>(m->move, cur) && legal(m->move))
           return m->move;
 
   // If is a capture withouth 'x' we may have missed it, so regenerate move list
   // to include captures and retry.
   if (!isCapture)
       for (const ExtMove& m : MoveList<PSEUDO_LEGAL>(*this))
-          if (move_is_san<false>(m.move, san) && legal(m.move))
+          if (move_is_san<false>(m.move, cur) && legal(m.move))
               return m.move;
+
+  // Ok, still not fixed, let's try to deduce the move out of the context. Play
+  // the game with the remaining moves and check if only one candidate is valid.
+  std::vector<Move> candidates;
+  for (ExtMove* m = moveList; m < last; ++m)
+      if (legal(m->move) && play_game(*this, m->move, cur, end))
+          candidates.push_back(m->move);
+
+  if (candidates.size() == 1) // Only one possible continuation
+      return candidates[0];
 
   fixed--; // No able to fix...
 
