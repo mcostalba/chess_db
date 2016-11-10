@@ -1,0 +1,67 @@
+[Event "?"]
+[White "Spassky"]
+[Black "Petrosian"]
+[Date "1969.??.??"]
+[Result "1-0"]
+
+{Queen's Gambit Declined (by transposition), 30 moves. Spassky plays an excellent opening and emerges with an advantage. Petrosian, under pressure, allows Spassky to obtain a passed d pawn which decides the game. Petrosian was world champion from 1963-1969; Spassky from 1969-1972.}
+1. c4 {The English opening. White takes possession of d5.}
+ 1... Nf6 {Developing and attacking the center.}
+ 2. Nc3 {A natural move.}
+ 2... e6 {Preparing to play 3... d5. Also playable is 2... e5.}
+ 3. Nf3
+ 3... d5
+ 4. d4 {This position can also arise from the Queen's gambit as follows: 1. d4 d5 2. c4 e6 3. Nc3 Nf6 4. Nf3.}
+ 4... c5 {This variation is called the Semi-Tarrasch Defense.}
+ 5. cxd5 {If 5... exd5 then Black will end up with an isolated queen pawn.}
+ 5... Nxd5 {The usual next move for White when this game was played was 6. e3}
+ 6. e4 $1 {Spassky will demonstrate the strength of the pawn center.}
+ 6... Nxc3
+ 7. bxc3
+ 7... cxd4
+ 8. cxd4 {White now occupies the center. The question is whether he will be able to use it to advantage or spend all his energy protecting it.}
+ 8... Bb4+ {The side with less space should strive to exchange pieces.}
+ 9. Bd2
+ 9... Bxd2+
+ 10. Qxd2
+ 10... 0-0
+ 11. Bc4 {A natural developing move.}
+ 11... Nc6 {Developing and beginning to put pressure on White's center.}
+ 12. 0-0
+ 12... b6 {The bishop is better placed on b7 then d7.}
+ 13. Rd1
+ 13... Bb7
+ 14. Rfe1 {Developing the last piece.}
+ 14... Rc8 {Placing the rook on the open file.}
+ 15. d5 $1 {If here 15... Na5 then Spassky planned 15. Bd3 exd5 16. e5 with a strong attack. White's bishop, knight, and queen all are ready for a kingside attack while Black's pieces are on the other wing.}
+ 15... exd5
+ 16. Bxd5 {White's pieces are now very active and it is difficult for Black to find a good defense.}
+ 16... Na5? {The knight ends up being out of the game. Either 16... Qe7 or 16... Qc7 is better.}
+ 17. Qf4 $1 {The queen is well placed here, exerting pressure on f7. The threat is Bxf7+ winning the queen.}
+ 17... Qc7
+ 18. Qf5 {threatening Ng5. If now 18... h6 then 19. Bxb7 Qxb7 20. Rd7 Rc7 21. Red1 and White's rook on the seventh rank gives him a distinct advantage.}
+ 18... Bxd5 {This gives White a very strong passed d pawn.}
+ 19. exd5
+ 19... Qc2 {White would have a good game after 20. Qxc2 Rxc2 21. Re7 Rxa2 22. Rxa7}
+ 20. Qf4 {White wants to force a win in the middle game rather than play out a long end game.}
+ 20... Qxa2
+ 21. d6 {Nimzovich often spoke of a past pawn's lust to expand.}
+ 21... Rcd8 {Covering the pawn's queening square.}
+ 22. d7
+ 22... Qc4
+ 23. Qf5 {White threatens 24. Ng5 as well as 24. Rc1 followd by 25. Rc7}
+ 23... h6
+ 24. Rdc1 {Now the rook will get to the seventh rank.}
+ 24... Qa6
+ 25. Rc7
+ 25... b5 {Giving the queen a better chance to defend.}
+ 26. Nd4
+ 26... Qb6
+ 27. Rc8 $1 {Black cannot play 27... Qxd4 because of 28. Rxd8 Rxd8 29. Re8+ Rxe8 30. dxe8=Q#. White threatens 28. Re8 Qxd4 29. Rxf8+ Rxf8 29. Rxf8 Kxf8 30. Qc5+ Qxc5 31. d8=Q#.}
+ 27... Nb7 {Guarding the rook on d8.}
+ 28. Nc6 $1
+ 28... Nd6
+ 29. Nxd8 $1 {A decisive finish.}
+ 29... Nxf5
+ 30. Nc6 {Black resigned since White is threatening both 31. Rxf8+ Kxf8 32. Re8# and 31. Rxf8+ Kxf8 32. d8=Q+ Qxd8 33. Nxd8}
+1-0
