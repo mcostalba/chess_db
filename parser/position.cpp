@@ -1119,7 +1119,8 @@ Move Position::san_to_move(const char* cur, const char* end, size_t& fixed) cons
 
   // If the best move is correct until the end we have finished, otherwise
   // replay the game with relaxed checks.
-  if (it->second == end || play_game(*this, it->first, cur, end) == end)
+  if (    candidates.size()
+      && (it->second == end || play_game(*this, it->first, cur, end) == end))
       return it->first;
 
   fixed--; // No able to fix...
