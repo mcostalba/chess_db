@@ -965,6 +965,10 @@ bool Position::move_is_san(Move m, const char* ref) const {
 
           if (capture(m) && (Strict || strchr(ref,'x')))
               *san++ =  'x';
+
+          // Add also if not a capture but 'x' is in ref
+          else if (!Strict && strchr(ref,'x'))
+              *san++ =  'x';
       }
       else if (capture(m))
       {
@@ -1088,12 +1092,11 @@ Move Position::san_to_move(const char* cur, const char* end, size_t& fixed) cons
       if (move_is_san<false>(m->move, cur) && legal(m->move))
           return m->move;
 
-  // If is a capture withouth 'x' we may have missed it, so regenerate move list
-  // to include captures and retry.
-  if (!isCapture)
-      for (const ExtMove& m : MoveList<PSEUDO_LEGAL>(*this))
-          if (move_is_san<false>(m.move, cur) && legal(m.move))
-              return m.move;
+  // If is a capture withouth 'x' or a non-capture with 'x' we may have missed
+  // it, so regenerate move list to include all moves and retry.
+  for (const ExtMove& m : MoveList<PSEUDO_LEGAL>(*this))
+      if (move_is_san<false>(m.move, cur) && legal(m.move))
+          return m.move;
 
   // Ok, still not fixed, let's try to deduce the move out of the context. Play
   // the game with the generated moves and check if only one candidate is valid.
