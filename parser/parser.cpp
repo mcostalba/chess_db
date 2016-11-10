@@ -510,7 +510,6 @@ void init() {
         ToStep[TAG][i] = CONTINUE;
 
     ToStep[TAG][T_RIGHT_BRACKET] = POP_STATE;
-    ToStep[TAG][T_LEFT_BRACKET ] = OPEN_TAG; // Nested brackets in a tag
 
     // STATE = FEN_TAG
     //
