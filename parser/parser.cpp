@@ -433,6 +433,14 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
         }
     }
 
+    // Force accounting of last game if still pending. Many reason for this to
+    // trigger: no newline at EOF, missing result, missing closing brace, etc.
+    if (state != ToStep[HEADER] && end - moves)
+    {
+        parse_game(moves, end, kTable, fen, fenEnd, fixed);
+        gameCnt++;
+    }
+
     stats.games = gameCnt;
     stats.moves = moveCnt;
     stats.fixed = fixed;
