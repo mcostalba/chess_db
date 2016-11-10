@@ -95,7 +95,7 @@ enum Step : uint8_t {
     FAIL, CONTINUE, OPEN_TAG, OPEN_BRACE_COMMENT, READ_FEN, CLOSE_FEN_TAG,
     OPEN_VARIATION, START_NAG, POP_STATE, START_MOVE_NUMBER, START_NEXT_SAN,
     CASTLE_OR_RESULT, START_READ_SAN, READ_MOVE_CHAR, END_MOVE, START_RESULT,
-    END_GAME, MISSING_RESULT
+    END_GAME, TAG_IN_BRACE, MISSING_RESULT
 };
 
 Token ToToken[256];
@@ -399,12 +399,20 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
         case END_GAME:
             if (end - moves)
                 parse_game(moves, end, kTable, fen, fenEnd, fixed);
+
             gameCnt++;
             end = curMove = moves;
             fenEnd = fen;
             state = ToStep[HEADER];
             stm = WHITE;
             break;
+
+        case TAG_IN_BRACE:
+             // Special case of missed brace close. Detect beginning of next game
+             if (strncmp(data, "[Event ", 7))
+                 break;
+
+             /* Fall through */
 
         case MISSING_RESULT: // Missing result, next game already started
             if (end - moves)
@@ -512,7 +520,8 @@ void init() {
     for (int i = 0; i < TOKEN_NB; i++)
         ToStep[BRACE_COMMENT][i] = CONTINUE;
 
-    ToStep[BRACE_COMMENT][T_RIGHT_BRACE] = POP_STATE;
+    ToStep[BRACE_COMMENT][T_RIGHT_BRACE ] = POP_STATE;
+    ToStep[BRACE_COMMENT][T_LEFT_BRACKET] = TAG_IN_BRACE; // Missed closing brace
 
     // STATE = VARIATION
     //
