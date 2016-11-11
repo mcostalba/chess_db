@@ -397,6 +397,11 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             break;
 
         case END_GAME:
+            if (*data != '\n') // Handle spaces in result, like 1/2 - 1/2
+            {
+                state = ToStep[RESULT];
+                break;
+            }
             if (end - moves)
                 parse_game(moves, end, kTable, fen, fenEnd, fixed);
 

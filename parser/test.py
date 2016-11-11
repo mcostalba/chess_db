@@ -9,6 +9,7 @@ from subprocess import STDOUT, check_output as qx
 DB = {'GM_games'               : {'games':  20, 'moves':  1519, 'fixed':  0},
       'ambiguous'              : {'games':   3, 'moves':   194, 'fixed':  2},
       'bali02'                 : {'games':  16, 'moves':  1485, 'fixed':  0},
+      'chessdoctor'            : {'games':  55, 'moves':  4648, 'fixed':249},
       'd00_chess_informant'    : {'games': 103, 'moves':  7019, 'fixed':  0},
       'electronic_campfire'    : {'games':   6, 'moves':   286, 'fixed':  2},
       'europe_echecs'          : {'games': 307, 'moves': 21024, 'fixed': 15},
