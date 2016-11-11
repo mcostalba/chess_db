@@ -250,15 +250,13 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
-    const char *cur = moves, *next = moves;
+    const char *cur = moves;
 
     if (fenEnd != fen)
         pos.set(fen, false, st++);
 
-    while (true)
+    while (cur < end)
     {
-        while (*next++) {} // Go to next move
-
         Move move = pos.san_to_move(cur, end, fixed);
         if (move == MOVE_NONE)
         {
@@ -271,24 +269,17 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
             }
             return cur;
         }
-        if (move == MOVE_NULL)
-        {
-            if (next == end)
-                break;
-
+        else if (move == MOVE_NULL)
             pos.do_null_move(*st++);
-            cur = next;
-            continue;
+        else
+        {
+            if (!DryRun)
+                kTable.push_back({pos.key(), to_polyglot(move), 1, 0});
+
+            pos.do_move(move, *st++, pos.gives_check(move));
         }
 
-        if (!DryRun)
-            kTable.push_back({pos.key(), to_polyglot(move), 1, 0});
-
-        if (next == end)
-            break;
-
-        pos.do_move(move, *st++, pos.gives_check(move));
-        cur = next;
+        while (*cur++) {} // Go to next move
     }
     return end;
 }
@@ -527,7 +518,6 @@ void init() {
 
     ToStep[FEN_TAG][T_QUOTES] = CLOSE_FEN_TAG;
 
-
     // STATE = BRACE_COMMENT
     //
     // Comment in braces, can appear almost everywhere. Note that brace comments
@@ -633,7 +623,7 @@ void process_pgn(const char* fname) {
     // Reserve enough capacity according to file size. This is a very crude
     // estimation, mainly we assume key index to be of 1.5 times the size of
     // the pgn file.
-    kTable.reserve(3 * size / 2 / sizeof(PolyEntry));
+    kTable.reserve(2 * size / sizeof(PolyEntry));
 
     std::cerr << "\nProcessing...";
 
@@ -675,7 +665,7 @@ void process_pgn(const char* fname) {
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed
               << "\nMBytes/second: " << float(size) / elapsed / 1000
-              << "\nSize of index file (MB): " << bookSize
+              << "\nSize of index file (bytes): " << bookSize
               << "\nBook file: " << bookName
               << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
 
