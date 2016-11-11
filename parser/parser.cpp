@@ -83,7 +83,7 @@ struct Stats {
 enum Token {
     T_NONE, T_SPACES, T_RESULT, T_MINUS, T_DOT, T_QUOTES, T_DOLLAR,
     T_LEFT_BRACKET, T_RIGHT_BRACKET, T_LEFT_BRACE, T_RIGHT_BRACE,
-    T_LEFT_PARENTHESIS, T_RIGHT_PARENTHESIS, T_ZERO, T_DIGIT, T_MOVE, TOKEN_NB
+    T_LEFT_PARENTHESIS, T_RIGHT_PARENTHESIS, T_ZERO, T_DIGIT, T_MOVE_HEAD, TOKEN_NB
 };
 
 enum State {
@@ -469,7 +469,6 @@ void init() {
     RootPos.set(startFEN, false, &st);
 
     ToToken['\n'] = ToToken['\r'] = ToToken[' '] = ToToken['\t'] = T_SPACES;
-    ToToken['!'] = ToToken['?'] = T_SPACES;
     ToToken['/'] = ToToken['*'] = T_RESULT;
     ToToken['-'] = T_MINUS;
     ToToken['.'] = T_DOT;
@@ -488,8 +487,12 @@ void init() {
     ToToken['a'] = ToToken['b'] = ToToken['c'] = ToToken['d'] =
     ToToken['e'] = ToToken['f'] = ToToken['g'] = ToToken['h'] =
     ToToken['N'] = ToToken['B'] = ToToken['R'] = ToToken['Q'] =
-    ToToken['K'] = ToToken['x'] = ToToken['+'] = ToToken['#'] =
-    ToToken['='] = ToToken['O'] = T_MOVE;
+    ToToken['K'] = ToToken['O'] = T_MOVE_HEAD;
+
+    // Trailing move notations are ignored because SAN detector
+    // does not need them and in some malformed PGN they appear
+    // one blank apart from the corresponding move.
+    ToToken['!'] = ToToken['?'] = ToToken['+'] = ToToken['#'] = T_SPACES;
 
     // STATE = HEADER
     //
@@ -562,7 +565,7 @@ void init() {
     ToStep[NEXT_MOVE][T_RESULT          ] = START_RESULT;
     ToStep[NEXT_MOVE][T_ZERO            ] = START_RESULT;
     ToStep[NEXT_MOVE][T_DOT             ] = FAIL;
-    ToStep[NEXT_MOVE][T_MOVE            ] = FAIL;
+    ToStep[NEXT_MOVE][T_MOVE_HEAD       ] = FAIL;
     ToStep[NEXT_MOVE][T_MINUS           ] = FAIL;
     ToStep[NEXT_MOVE][T_DIGIT           ] = START_MOVE_NUMBER;
 
@@ -592,7 +595,7 @@ void init() {
     ToStep[NEXT_SAN][T_ZERO            ] = CASTLE_OR_RESULT;  // 0-0 or 0-1
     ToStep[NEXT_SAN][T_DOT             ] = CONTINUE;          // Like 4... exd5
     ToStep[NEXT_SAN][T_DIGIT           ] = START_MOVE_NUMBER; // Same as above
-    ToStep[NEXT_SAN][T_MOVE            ] = START_READ_SAN;
+    ToStep[NEXT_SAN][T_MOVE_HEAD       ] = START_READ_SAN;
     ToStep[NEXT_SAN][T_MINUS           ] = START_READ_SAN;    // Null move "--"
 
     // STATE = READ_SAN
