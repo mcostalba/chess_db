@@ -62,7 +62,7 @@ std::string uci_square(Square s) {
   return std::string{ char('a' + file_of(s)), char('1' + rank_of(s)) };
 }
 
-/// UCI::move() converts a Move to a string in coordinate notation (g1f3, a7a8q).
+/// uci_move() converts a Move to a string in coordinate notation (g1f3, a7a8q).
 /// The only special case is castling, where we print in the e1g1 notation in
 /// normal chess mode, and in e1h1 notation in chess960 mode. Internally all
 /// castling moves are always encoded as 'king captures rook'.
@@ -908,7 +908,19 @@ void Position::do_null_move(StateInfo& newSt) {
 }
 
 
-/// Position::move_is_san() takes a legal Move and a san as input and returns true if equivalent
+/// Position::move_is_uci() takes a pseudo-legal Move and a uci as input and
+/// returns true if moves are equivalent.
+bool Position::move_is_uci(Move m, const char* ref) const {
+
+  string uci1 = uci_move(m, false), uci2 = uci1, uci3 = uci1;
+  uci2.insert(2, "-");
+  uci3.insert(2, "x");
+  return uci1 == ref || uci2 == ref || uci3 == ref;
+}
+
+
+/// Position::move_is_san() takes a pseudo-legal Move and a san as input and
+/// returns true if moves are equivalent.
 template<bool Strict>
 bool Position::move_is_san(Move m, const char* ref) const {
 
@@ -926,10 +938,15 @@ bool Position::move_is_san(Move m, const char* ref) const {
   if (type_of(m) == CASTLING)
   {
       int cmp, last = to > from ? 3 : 5;
-      if (ref[0] == '0')
-          cmp = to > from ? strncmp(ref, "0-0", 3) : strncmp(ref, "0-0-0", 5);
-      else
+
+      if (ref[0] == 'O')
           cmp = to > from ? strncmp(ref, "O-O", 3) : strncmp(ref, "O-O-O", 5);
+      else if (ref[0] == '0')
+          cmp = to > from ? strncmp(ref, "0-0", 3) : strncmp(ref, "0-0-0", 5);
+      else if (ref[0] == 'o')
+          cmp = to > from ? strncmp(ref, "o-o", 3) : strncmp(ref, "o-o-o", 5);
+      else
+          cmp = 1;
 
       return !cmp && (ref[last] == '\0' || ref[last] == '+' || ref[last] == '#');
   }
@@ -1018,8 +1035,12 @@ static inline Bitboard trimPawn(Bitboard target, const char* san, bool isCapture
 
   if (isCapture)
   {
-      assert(san[1] == 'x');
-      return target & make_square(File(san[2] - 'a'), Rank(san[3] - '1'));
+      if (san[1] == 'x')
+          return target & make_square(File(san[2] - 'a'), Rank(san[3] - '1'));
+      else
+          // Wrong notation, possibly a uci move like d4xf6, in this case retrun
+          // empty target becuase strict search will not find it anyhow
+          return 0;
   }
   else
       return target & file_bb(File(san[0] - 'a'));
@@ -1060,6 +1081,7 @@ Move Position::san_to_move(const char* cur, const char* end, size_t& fixed) cons
 
   case 'O':
   case '0':
+  case 'o':
       last = us == WHITE ? generate_castling_moves<WHITE, NON_EVASIONS, false>(*this, moveList)
                          : generate_castling_moves<BLACK, NON_EVASIONS, false>(*this, moveList);
       break;
@@ -1099,9 +1121,9 @@ Move Position::san_to_move(const char* cur, const char* end, size_t& fixed) cons
           return m->move;
 
   // If is a capture withouth 'x' or a non-capture with 'x' we may have missed
-  // it, so regenerate move list to include all moves and retry.
-  for (const ExtMove& m : MoveList<PSEUDO_LEGAL>(*this))
-      if (move_is_san<false>(m.move, cur) && legal(m.move))
+  // it, so regenerate move list to include all legal moves and retry.
+  for (const ExtMove& m : MoveList<LEGAL>(*this))
+      if (move_is_san<false>(m.move, cur) || move_is_uci(m.move, cur))
           return m.move;
 
   // Ok, still not fixed, let's try to deduce the move out of the context. Play

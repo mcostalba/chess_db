@@ -487,7 +487,7 @@ void init() {
     ToToken['a'] = ToToken['b'] = ToToken['c'] = ToToken['d'] =
     ToToken['e'] = ToToken['f'] = ToToken['g'] = ToToken['h'] =
     ToToken['N'] = ToToken['B'] = ToToken['R'] = ToToken['Q'] =
-    ToToken['K'] = ToToken['O'] = T_MOVE_HEAD;
+    ToToken['K'] = ToToken['O'] = ToToken['o'] = T_MOVE_HEAD;
 
     // Trailing move notations are ignored because SAN detector
     // does not need them and in some malformed PGN they appear
