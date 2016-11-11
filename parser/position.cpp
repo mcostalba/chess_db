@@ -54,6 +54,7 @@ namespace Zobrist {
 namespace {
 
 const string PieceToChar(" PNBRQK  pnbrqk");
+const string PieceToSAN(" PNBRQK  PNBRQK");
 
 
 // uci_square() converts a Square to a string in algebraic notation (g1, a7, etc.)
@@ -654,8 +655,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
   // Increment ply counters. In particular, rule50 will be reset to zero later on
   // in case of a capture or a pawn move.
-  ++gamePly;
-  ++st->rule50;
+//   ++gamePly;
+//   ++st->rule50;
 
   Color us = sideToMove;
   Color them = ~us;
@@ -669,8 +670,8 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
   assert(type_of(captured) != KING);
 
   // Build pgn key, as an unique sequence of moves
-//  const Key* pgn = Zobrist::pgn[gamePly / PGN_MAX_PLY];
-//  st->pgnKey ^= pgn[from] ^ pgn[to];
+//    const Key* pgn = Zobrist::pgn[gamePly / PGN_MAX_PLY];
+//    st->pgnKey ^= pgn[from] ^ pgn[to];
 
   if (type_of(m) == CASTLING)
   {
@@ -705,7 +706,7 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
               board[capsq] = NO_PIECE; // Not done by remove_piece()
           }
 
-          st->pawnKey ^= Zobrist::psq[captured][capsq];
+//           st->pawnKey ^= Zobrist::psq[captured][capsq];
       }
 
       // Update board and piece lists
@@ -713,10 +714,10 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
       // Update material hash key and prefetch access to materialTable
       k ^= Zobrist::psq[captured][capsq];
-      st->materialKey ^= Zobrist::psq[captured][pieceCount[captured]];
+//       st->materialKey ^= Zobrist::psq[captured][pieceCount[captured]];
 
       // Reset rule 50 counter
-      st->rule50 = 0;
+//       st->rule50 = 0;
   }
 
   // Update hash key
@@ -764,16 +765,16 @@ void Position::do_move(Move m, StateInfo& newSt, bool givesCheck) {
 
           // Update hash keys
           k ^= Zobrist::psq[pc][to] ^ Zobrist::psq[promotion][to];
-          st->pawnKey ^= Zobrist::psq[pc][to];
-          st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
-                            ^ Zobrist::psq[pc][pieceCount[pc]];
+//          st->pawnKey ^= Zobrist::psq[pc][to];
+//          st->materialKey ^=  Zobrist::psq[promotion][pieceCount[promotion]-1]
+//                            ^ Zobrist::psq[pc][pieceCount[pc]];
       }
 
       // Update pawn hash key and prefetch access to pawnsTable
-      st->pawnKey ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
+//      st->pawnKey ^= Zobrist::psq[pc][from] ^ Zobrist::psq[pc][to];
 
       // Reset rule 50 draw counter
-      st->rule50 = 0;
+//      st->rule50 = 0;
   }
 
   // Set capture piece
@@ -920,6 +921,8 @@ bool Position::move_is_san(Move m, const char* ref) const {
   Piece pc = piece_on(from);
   PieceType pt = type_of(pc);
 
+  buf[2] = '\0'; // Init to fast compare later on
+
   if (type_of(m) == CASTLING)
   {
       int cmp, last = to > from ? 3 : 5;
@@ -930,71 +933,74 @@ bool Position::move_is_san(Move m, const char* ref) const {
 
       return !cmp && (ref[last] == '\0' || ref[last] == '+' || ref[last] == '#');
   }
-  else
+
+  if (pt != PAWN)
   {
-      if (pt != PAWN)
+      *san++ = PieceToSAN[pt];
+
+      // A disambiguation occurs if we have more then one piece of type 'pt'
+      // that can reach 'to' with a legal move.
+      others = b = (attacks_from(pc, to) & pieces(sideToMove, pt)) ^ from;
+
+      while (Strict && b)
       {
-          *san++ = PieceToChar[make_piece(WHITE, pt)]; // Upper case
-
-          // A disambiguation occurs if we have more then one piece of type 'pt'
-          // that can reach 'to' with a legal move.
-          others = b = (attacks_from(pc, to) & pieces(sideToMove, pt)) ^ from;
-
-          while (Strict && b)
-          {
-              Square s = pop_lsb(&b);
-              if (!legal(make_move(s, to)))
-                  others ^= s;
-          }
-
-          if (!others)
-          { /* Disambiguation is not needed */ }
-
-          else if (  !(others & file_bb(from))
-                   && (Strict || (ref[1] > '8'))) // Check for wrong row disambiguation
-              *san++ = char('a' + file_of(from));
-
-          else if (!(others & rank_bb(from)))
-              *san++ = char('1' + rank_of(from));
-
-          else
-          {
-              *san++ = char('a' + file_of(from));
-              *san++ = char('1' + rank_of(from));
-          }
-
-          if (capture(m) && (Strict || strchr(ref,'x')))
-              *san++ =  'x';
-
-          // Add also if not a capture but 'x' is in ref
-          else if (!Strict && strchr(ref,'x'))
-              *san++ =  'x';
+          Square s = pop_lsb(&b);
+          if (!legal(make_move(s, to)))
+              others ^= s;
       }
-      else if (capture(m))
-      {
+
+      if (!others)
+      { /* Disambiguation is not needed */ }
+
+      else if (  !(others & file_bb(from))
+               && (Strict || (ref[1] > '8'))) // Check for wrong row disambiguation
           *san++ = char('a' + file_of(from));
 
-          if (Strict || strchr(ref,'x'))
-              *san++ = 'x';
-      }
+      else if (!(others & rank_bb(from)))
+          *san++ = char('1' + rank_of(from));
 
-      *san++ = char('a' + file_of(to));
-      *san++ = char('1' + rank_of(to));
-
-      if (buf[0] != ref[0] || buf[1] != ref[1])
-          return false;
-
-      if (type_of(m) == PROMOTION)
+      else
       {
-          if (Strict) // Sometime promotion move misses the '='
-              *san++ = '=';
-
-          *san++ = PieceToChar[make_piece(WHITE, promotion_type(m))];
+          *san++ = char('a' + file_of(from));
+          *san++ = char('1' + rank_of(from));
       }
+
+      if (capture(m) && (Strict || strchr(ref,'x')))
+          *san++ =  'x';
+
+      // Add also if not a capture but 'x' is in ref
+      else if (!Strict && strchr(ref,'x'))
+          *san++ =  'x';
+  }
+  else if (capture(m))
+  {
+      *san++ = char('a' + file_of(from));
+
+      if (Strict || strchr(ref,'x'))
+          *san++ = 'x';
   }
 
+  *san++ = char('a' + file_of(to));
+  *san++ = char('1' + rank_of(to));
+
+  if (type_of(m) == PROMOTION)
+  {
+      if (Strict) // Sometime promotion move misses the '='
+          *san++ = '=';
+
+      *san++ = PieceToSAN[promotion_type(m)];
+  }
+
+  if (   buf[1] != ref[1]
+      || buf[2] != ref[2]
+      || buf[0] != ref[0])
+      return false;
+
+  if (!ref[2] || ! ref[3]) // Quiet move both pawn and piece: e4, Nf3
+      return true;
+
   // Be forgivng if the move is missing check annotation
-  return !strncmp(ref, buf, san - buf);
+  return !strncmp(ref+3, buf+3, san - buf - 3);
 }
 
 
