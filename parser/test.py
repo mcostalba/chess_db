@@ -7,7 +7,7 @@ import sys
 from subprocess import STDOUT, check_output as qx
 
 Tests = { 'GM_games'                : {'games':  20, 'moves':  1519},
-          'ambiguous'               : {'games':   2, 'moves':    76},
+          'ambiguous'               : {'games':   3, 'moves':   194},
           'bali02'                  : {'games':  16, 'moves':  1485},
           'd00_chess_informant'     : {'games': 103, 'moves':  7019},
           'electronic_campfire'     : {'games':   6, 'moves':   286},

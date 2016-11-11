@@ -604,7 +604,8 @@ void init() {
     for (int i = 0; i < TOKEN_NB; i++)
         ToStep[READ_SAN][i] = READ_MOVE_CHAR;
 
-    ToStep[READ_SAN][T_SPACES] = END_MOVE;
+    ToStep[READ_SAN][T_SPACES    ] = END_MOVE;
+    ToStep[READ_SAN][T_LEFT_BRACE] = OPEN_BRACE_COMMENT;
 
     // STATE = RESULT
     //
