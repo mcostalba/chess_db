@@ -7,7 +7,7 @@ import sys
 from subprocess import STDOUT, check_output as qx
 
 Tests = { 'GM_games'                : { 'games':  20, 'moves':  1519},
-          'ambiguous'               : { 'games':   1, 'moves':    59},
+          'ambiguous'               : { 'games':   2, 'moves':    76},
           'bali02'                  : { 'games':  16, 'moves':  1485},
           'd00_chess_informant'     : { 'games': 103, 'moves':  7019},
           'electronic_campfire'     : { 'games':   6, 'moves':   286},
@@ -23,7 +23,16 @@ Tests = { 'GM_games'                : { 'games':  20, 'moves':  1519},
           'middleg'                 : { 'games': 481, 'moves': 31560},
           'moscow64'                : { 'games':  42, 'moves':  3760},
           'newyork1924'             : { 'games': 110, 'moves': 10517},
-}
+          'perle'                   : { 'games': 194, 'moves': 14922},
+          'polgar'                  : { 'games':  40, 'moves':  3348},
+          'pon_korch'               : { 'games':   8, 'moves':  1003},
+          'romero'                  : { 'games':   4, 'moves':   363},
+          'scarborough_2001'        : { 'games': 385, 'moves': 30137},
+          'scca'                    : { 'games':  75, 'moves':  5114},
+          'schiller'                : { 'games':   8, 'moves':   681},
+          'semicomm'                : { 'games':  46, 'moves':  3004},
+        }
+
 
 def check_result(output, fname, stats):
     fname = os.path.splitext(fname)[0]
@@ -41,6 +50,7 @@ def check_result(output, fname, stats):
         ok1 = Tests[fname]['games'] == games
         ok2 = Tests[fname]['moves'] == moves
         return 'OK' if ok1 and ok2 else 'FAIL'
+
 
 def run_file(file, stats):
     fname = os.path.basename(file)
