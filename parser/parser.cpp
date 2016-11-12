@@ -197,8 +197,6 @@ size_t write_poly_file(const Keys& kTable, const std::string& fname, bool full) 
     for (const PolyEntry& e : kTable)
         if (e.key != prev->key || e.move != prev->move || full)
         {
-            assert(e.weight);
-
             write(e, data);
             ofs.write((char*)data, SizeOfPolyEntry);
             prev = &e;
@@ -216,8 +214,9 @@ void sort_by_frequency(Keys& kTable, size_t start, size_t end) {
     for (size_t i = start; i < end; ++i)
         moves[kTable[i].move]++;
 
+    // Normalize weights to be stored in a uint16_t, so that 100% -> 0xFFFF
     for (size_t i = start; i < end; ++i)
-        kTable[i].weight = moves[kTable[i].move];
+        kTable[i].weight = moves[kTable[i].move] * 0xFFFF / (end - start);
 
     std::sort(kTable.begin() + start, kTable.begin() + end,
               [](const PolyEntry& a, const PolyEntry& b) -> bool
@@ -657,6 +656,8 @@ void process_pgn(int argc, char* argv[]) {
 
     elapsed = now() - elapsed + 1; // Ensure positivity to avoid a 'divide by zero'
 
+    unmap(baseAddress, mapping);
+
     std::cerr << "done\nSorting...";
 
     std::sort(kTable.begin(), kTable.end());
@@ -692,8 +693,6 @@ void process_pgn(int argc, char* argv[]) {
               << "\nSize of index file (bytes): " << bookSize
               << "\nBook file: " << bookName
               << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
-
-    unmap(baseAddress, mapping);
 }
 
 }
