@@ -251,6 +251,7 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
+    Move move = MOVE_NULL;
     const char *cur = moves;
 
     if (fenEnd != fen)
@@ -269,7 +270,7 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
                           | ((uintptr_t(data) >> 3) & 0x3FFFFFFF);
     while (cur < end)
     {
-        Move move = pos.san_to_move(cur, end, fixed);
+        move = pos.san_to_move(cur, end, fixed);
         if (move == MOVE_NONE)
         {
             if (!DryRun)
@@ -277,7 +278,6 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
                 const char* sep = pos.side_to_move() == WHITE ? "" : "..";
                 std::cerr << "\nWrong move notation: " << sep << cur
                           << "\n" << pos << std::endl;
-
             }
             return cur;
         }
@@ -293,6 +293,11 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
 
         while (*cur++) {} // Go to next move
     }
+
+    // Store position after final move
+    if (!DryRun && move != MOVE_NULL)
+        kTable.push_back({pos.key(), to_polyglot(move), 1, learn});
+
     return end;
 }
 
