@@ -28,24 +28,15 @@ namespace PSQT {
 }
 
 namespace Parser {
-  void init();
-  bool process_pgn(const char* fname);
+    void init();
+    bool process_pgn(int argc, char* argv[]);
 }
-
 
 int main(int argc, char* argv[]) {
 
     Bitboards::init();
     Position::init();
     Parser::init();
-
-    if (argc < 2)
-    {
-        std::cerr << "Missing pgn file name..." << std::endl;
-        return 0;
-    }
-
-    Parser::process_pgn(argv[1]);
-
+    Parser::process_pgn(argc, argv);
     return 0;
 }

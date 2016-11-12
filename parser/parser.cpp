@@ -186,7 +186,7 @@ template<> uint8_t* write(const PolyEntry& e, uint8_t* data) {
     return write(e.learn,  data);
 }
 
-size_t write_poly_file(const Keys& kTable, const std::string& fname) {
+size_t write_poly_file(const Keys& kTable, const std::string& fname, bool full) {
 
     uint8_t data[SizeOfPolyEntry];
     std::ofstream ofs;
@@ -195,7 +195,7 @@ size_t write_poly_file(const Keys& kTable, const std::string& fname) {
     const PolyEntry* prev = &kTable[0];
 
     for (const PolyEntry& e : kTable)
-        if (e.key != prev->key || e.move != prev->move)
+        if (e.key != prev->key || e.move != prev->move || full)
         {
             assert(e.weight);
 
@@ -246,7 +246,8 @@ inline PMove to_polyglot(Move m) {
 
 template<bool DryRun = false>
 const char* parse_game(const char* moves, const char* end, Keys& kTable,
-                       const char* fen, const char* fenEnd, size_t& fixed ) {
+                       const char* fen, const char* fenEnd, size_t& fixed,
+                       const char* data) {
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
@@ -255,6 +256,17 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
     if (fenEnd != fen)
         pos.set(fen, false, st++);
 
+    // Use Polyglot 'learn' parameter to store game result in the upper 2 bits,
+    // and game offset in the PGN file. Note that the offset is 8 bytes aligned
+    // and points to "somewhere" in the game. It is up to the look up tool to
+    // find game's boundaries. This allow us to index up to 8GB PGN files.
+    // Result is stored in the upper 2 bits so that sorting by 'learn' allows
+    // easy counting of result statistics.
+    //
+    // Result is coded from 0 to 3 as WHITE_WIN, BLACK_WIN, DRAW, RESULT_UNKNOWN
+    int result = data ? (*(data-1) - '0') : 3;
+    const uint32_t learn =  ((uint32_t(result) & 3) << 31)
+                          | ((uintptr_t(data) >> 3) & 0x3FFFFFFF);
     while (cur < end)
     {
         Move move = pos.san_to_move(cur, end, fixed);
@@ -274,7 +286,7 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
         else
         {
             if (!DryRun)
-                kTable.push_back({pos.key(), to_polyglot(move), 1, 0});
+                kTable.push_back({pos.key(), to_polyglot(move), 1, learn});
 
             pos.do_move(move, *st++, pos.gives_check(move));
         }
@@ -393,9 +405,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 state = ToStep[RESULT];
                 break;
             }
-            if (end - moves)
-                parse_game(moves, end, kTable, fen, fenEnd, fixed);
-
+            parse_game(moves, end, kTable, fen, fenEnd, fixed, data);
             gameCnt++;
             end = curMove = moves;
             fenEnd = fen;
@@ -411,8 +421,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
              /* Fall through */
 
         case MISSING_RESULT: // Missing result, next game already started
-            if (end - moves)
-                parse_game(moves, end, kTable, fen, fenEnd, fixed);
+            parse_game(moves, end, kTable, fen, fenEnd, fixed, data);
             gameCnt++;
             end = curMove = moves;
             fenEnd = fen;
@@ -433,7 +442,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
     // trigger: no newline at EOF, missing result, missing closing brace, etc.
     if (state != ToStep[HEADER] && end - moves)
     {
-        parse_game(moves, end, kTable, fen, fenEnd, fixed);
+        parse_game(moves, end, kTable, fen, fenEnd, fixed, data);
         gameCnt++;
     }
 
@@ -452,7 +461,8 @@ const char* play_game(const Position& pos, Move move, const char* cur, const cha
     Position p = pos;
     p.do_move(move, st, pos.gives_check(move));
     while (*cur++) {} // Move to next move in game
-    return cur < end ? parse_game<true>(cur, end, k, p.fen().c_str(), nullptr, fixed) : cur;
+    return cur < end ? parse_game<true>(cur, end, k, p.fen().c_str(),
+                                        nullptr, fixed, nullptr) : cur;
 }
 
 namespace Parser {
@@ -611,17 +621,26 @@ void init() {
     ToStep[RESULT][T_SPACES] = END_GAME;
 }
 
-void process_pgn(const char* fname) {
+void process_pgn(int argc, char* argv[]) {
 
     Keys kTable;
     Stats stats;
     uint64_t mapping, size;
     void* baseAddress;
 
+    if (argc < 2)
+    {
+        std::cerr << "Missing PGN file name..." << std::endl;
+        exit(0);
+    }
+
+    const char* fname = argv[1];
+    bool full = (argc > 2) && !strcmp(argv[2], "full");
+
     map(fname, &baseAddress, &mapping, &size);
 
     // Reserve enough capacity according to file size. This is a very crude
-    // estimation, mainly we assume key index to be of 1.5 times the size of
+    // estimation, mainly we assume key index to be of 2 times the size of
     // the pgn file.
     kTable.reserve(2 * size / sizeof(PolyEntry));
 
@@ -655,7 +674,7 @@ void process_pgn(const char* fname) {
     if (lastdot != std::string::npos)
         bookName = bookName.substr(0, lastdot);
     bookName += ".bin";
-    size_t bookSize = write_poly_file(kTable, bookName);
+    size_t bookSize = write_poly_file(kTable, bookName, full);
 
     std::cerr << "done\n"
               << "\nGames: " << stats.games
