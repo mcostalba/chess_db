@@ -40,40 +40,13 @@
 #include <windows.h>
 #endif
 
+#include "book.h"
 #include "misc.h"
 #include "position.h"
 
 namespace {
 
-typedef uint64_t PKey;  // Polyglot key
-typedef uint16_t PMove; // Polyglot move
-
-/*
-   A Polyglot book is a series of "entries" of 16 bytes:
-
-    key    uint64
-    move   uint16
-    weight uint16
-    learn  uint32
-
-   All integers are stored highest byte first (regardless of size). The entries
-   are ordered according to key. Lowest key first.
-*/
-
-struct PolyEntry {
-    PKey     key;
-    PMove    move;
-    uint16_t weight;
-    uint32_t learn;
-};
 typedef std::vector<PolyEntry> Keys;
-
-// Avoid alignment issues with sizeof(PolyEntry)
-const size_t SizeOfPolyEntry = sizeof(PKey) + sizeof(PMove) + sizeof(uint16_t) + sizeof(uint32_t);
-
-inline bool operator<(const PolyEntry& f, const PolyEntry& s) {
-    return f.key  < s.key;
-}
 
 struct Stats {
     int64_t games;
@@ -691,6 +664,35 @@ void make_book(std::istringstream& is) {
               << "\nSize of index file (bytes): " << bookSize
               << "\nBook file: " << bookName
               << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
+}
+
+void find(std::istringstream& is) {
+
+    PolyglotBook book;
+    std::string bookName, token, fenStr;
+
+    is >> bookName;
+
+    if (bookName.empty())
+    {
+        std::cerr << "Missing PGN file name..." << std::endl;
+        exit(0);
+    }
+
+    while (is >> token)
+        fenStr += token + " ";
+
+    if (fenStr.empty())
+    {
+        std::cerr << "Missing FEN string..." << std::endl;
+        exit(0);
+    }
+
+    StateInfo st;
+    RootPos.set(fenStr, false, &st);
+    size_t ofs = book.probe(RootPos.key(), bookName.c_str());
+    std::cerr << "Key: " << RootPos.key()
+              << "\nOffset: " << ofs << std::endl;
 }
 
 }

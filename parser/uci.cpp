@@ -29,7 +29,8 @@
 using namespace std;
 
 namespace Parser {
-    bool make_book(istringstream& is);
+    void make_book(istringstream& is);
+    void find(istringstream& is);
 }
 
 namespace {
@@ -109,6 +110,7 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "position")   position(pos, is);
       else if (token == "d")     std::cerr << pos << std::endl;
       else if (token == "book")  Parser::make_book(is);
+      else if (token == "find")  Parser::find(is);
       else
           std::cerr << "Unknown command: " << cmd << std::endl;
 
