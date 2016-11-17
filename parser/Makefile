@@ -16,7 +16,7 @@ BINDIR = $(PREFIX)/bin
 PGOBENCH = ./$(EXE) bench
 
 ### Object files
-OBJS = bitboard.o main.o misc.o parser.o position.o
+OBJS = bitboard.o main.o misc.o parser.o position.o uci.o
 
 ### ==========================================================================
 ### Section 2. High-level Configuration

@@ -25,6 +25,7 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <sstream>
 
 #ifndef _WIN32
 #include <fcntl.h>
@@ -620,23 +621,26 @@ void init() {
     ToStep[RESULT][T_SPACES] = END_GAME;
 }
 
-void process_pgn(int argc, char* argv[]) {
+void make_book(std::istringstream& is) {
 
     Keys kTable;
     Stats stats;
     uint64_t mapping, size;
     void* baseAddress;
+    std::string bookName, opt;
 
-    if (argc < 2)
+    is >> bookName;
+
+    if (bookName.empty())
     {
         std::cerr << "Missing PGN file name..." << std::endl;
         exit(0);
     }
 
-    const char* fname = argv[1];
-    bool full = (argc > 2) && !strcmp(argv[2], "full");
+    is >> opt;
+    bool full = opt == "full";
 
-    map(fname, &baseAddress, &mapping, &size);
+    map(bookName.c_str(), &baseAddress, &mapping, &size);
 
     // Reserve enough capacity according to file size. This is a very crude
     // estimation, mainly we assume key index to be of 2 times the size of
@@ -670,7 +674,6 @@ void process_pgn(int argc, char* argv[]) {
 
     std::cerr << "done\nWriting Polygot book...";
 
-    std::string bookName = std::string(fname);
     size_t lastdot = bookName.find_last_of(".");
     if (lastdot != std::string::npos)
         bookName = bookName.substr(0, lastdot);

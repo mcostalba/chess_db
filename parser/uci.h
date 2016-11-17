@@ -18,25 +18,25 @@
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <iostream>
+#ifndef UCI_H_INCLUDED
+#define UCI_H_INCLUDED
 
-#include "bitboard.h"
-#include "position.h"
-#include "uci.h"
+#include <map>
+#include <string>
 
-namespace PSQT {
-  void init();
-}
+#include "types.h"
 
-namespace Parser {
-    void init();
-}
+class Position;
 
-int main(int argc, char* argv[]) {
+namespace UCI {
 
-    Bitboards::init();
-    Position::init();
-    Parser::init();
-    UCI::loop(argc, argv);
-    return 0;
-}
+void loop(int argc, char* argv[]);
+std::string value(Value v);
+std::string square(Square s);
+std::string move(Move m, bool chess960);
+std::string pv(const Position& pos, Depth depth, Value alpha, Value beta);
+Move to_move(const Position& pos, std::string& str);
+
+} // namespace UCI
+
+#endif // #ifndef UCI_H_INCLUDED

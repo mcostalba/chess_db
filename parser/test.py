@@ -61,7 +61,7 @@ def run_file(file, stats):
     fname = os.path.basename(file)
     sys.stdout.write('Processing ' + fname + '...')
     sys.stdout.flush()
-    output = qx(["./parser", file], stderr=STDOUT)
+    output = qx(["./parser", 'book', file], stderr=STDOUT)
     result = check_result(output, fname, stats)
     print(result)
 
