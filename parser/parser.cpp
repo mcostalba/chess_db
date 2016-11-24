@@ -72,6 +72,10 @@ enum Step : uint8_t {
     END_GAME, TAG_IN_BRACE, MISSING_RESULT
 };
 
+enum MetaType {
+    MOVE_TOTAL, MOVE_WIN, MOVE_DRAW
+};
+
 Token ToToken[256];
 Step ToStep[STATE_NB][TOKEN_NB];
 Position RootPos;
@@ -181,7 +185,7 @@ size_t write_poly_file(const Keys& kTable, const std::string& fname, bool full) 
     return size;
 }
 
-void sort_by_frequency(Keys& kTable, size_t start, size_t end) {
+void sort_by_frequency(Keys& kTable, size_t start, size_t end, Keys& metaTable) {
 
     std::map<PMove, int> moves;
 
@@ -190,7 +194,18 @@ void sort_by_frequency(Keys& kTable, size_t start, size_t end) {
 
     // Normalize weights to be stored in a uint16_t, so that 100% -> 0xFFFF
     for (size_t i = start; i < end; ++i)
+    {
         kTable[i].weight = moves[kTable[i].move] * 0xFFFF / (end - start);
+
+        // For (positions, moves) with many games, build a meta information
+        // summary to speed up probing.
+        if (moves[kTable[i].move] > 1024)
+        {
+            uint32_t learn = (MOVE_TOTAL & 0xF) << 28;
+            learn |= moves[kTable[i].move] & 0xFFFFFFF;
+            metaTable.push_back({kTable[i].key, MOVE_NONE, kTable[i].move, learn});
+        }
+    }
 
     std::sort(kTable.begin() + start, kTable.begin() + end,
               [](const PolyEntry& a, const PolyEntry& b) -> bool
@@ -596,7 +611,7 @@ void init() {
 
 void make_book(std::istringstream& is) {
 
-    Keys kTable;
+    Keys kTable, metaTable;
     Stats stats;
     uint64_t mapping, size;
     void* baseAddress;
@@ -639,11 +654,17 @@ void make_book(std::istringstream& is) {
         if (kTable[idx].key != kTable[idx - 1].key)
         {
             if (idx - last > 2)
-                sort_by_frequency(kTable, last, idx);
+                sort_by_frequency(kTable, last, idx, metaTable);
 
             last = idx;
             uniqueKeys++;
         }
+
+    for (auto& m : metaTable)
+        kTable.push_back(m);
+
+    // Sort again with added meta info
+    std::stable_sort(kTable.begin(), kTable.end());
 
     std::cerr << "done\nWriting Polygot book...";
 
