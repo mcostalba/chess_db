@@ -185,8 +185,9 @@ size_t write_poly_file(const Keys& kTable, const std::string& fname, bool full) 
     return size;
 }
 
-void sort_by_frequency(Keys& kTable, size_t start, size_t end, Keys& metaTable) {
+void sort_by_frequency(Keys& kTable, size_t start, size_t end) {
 
+    Keys metaTable;
     std::map<PMove, int> moves;
 
     for (size_t i = start; i < end; ++i)
@@ -213,6 +214,9 @@ void sort_by_frequency(Keys& kTable, size_t start, size_t end, Keys& metaTable) 
         return    a.weight > b.weight
               || (a.weight == b.weight && a.move > b.move);
     });
+
+    if (!metaTable.empty())
+        kTable.insert(kTable.begin() + start, metaTable.begin(), metaTable.end());
 }
 
 inline PMove to_polyglot(Move m) {
@@ -611,7 +615,7 @@ void init() {
 
 void make_book(std::istringstream& is) {
 
-    Keys kTable, metaTable;
+    Keys kTable;
     Stats stats;
     uint64_t mapping, size;
     void* baseAddress;
@@ -654,17 +658,11 @@ void make_book(std::istringstream& is) {
         if (kTable[idx].key != kTable[idx - 1].key)
         {
             if (idx - last > 2)
-                sort_by_frequency(kTable, last, idx, metaTable);
+                sort_by_frequency(kTable, last, idx);
 
             last = idx;
             uniqueKeys++;
         }
-
-    for (auto& m : metaTable)
-        kTable.push_back(m);
-
-    // Sort again with added meta info
-    std::stable_sort(kTable.begin(), kTable.end());
 
     std::cerr << "done\nWriting Polygot book...";
 
