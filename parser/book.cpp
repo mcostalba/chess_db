@@ -78,7 +78,9 @@ size_t PolyglotBook::probe(Key key, const string& fName) {
   if (fileName != fName && !open(fName.c_str()))
       return 0;
 
-  return find_first(key);
+  size_t ofs = find_first(key);
+  close();
+  return ofs;
 }
 
 
@@ -112,5 +114,5 @@ size_t PolyglotBook::find_first(Key key) {
 
   assert(low == high);
 
-  return low;
+  return low * SizeOfPolyEntry;
 }

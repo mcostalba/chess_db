@@ -43,6 +43,7 @@
 #include "book.h"
 #include "misc.h"
 #include "position.h"
+#include "uci.h"
 
 namespace {
 
@@ -146,6 +147,22 @@ void error(Step* state, const char* data) {
     exit(0);
 }
 
+
+template<typename T> void read_entry(T& n, std::ifstream& ifs) {
+
+    n = 0;
+    for (size_t i = 0; i < sizeof(T); ++i)
+        n = T((n << 8) + ifs.get());
+}
+
+template<> void read_entry(PolyEntry& e, std::ifstream& ifs) {
+
+  read_entry(e.key, ifs);
+  read_entry(e.move, ifs);
+  read_entry(e.weight, ifs);
+  read_entry(e.learn, ifs);
+}
+
 /// Convert a number of type T into a sequence of bytes in big-endian format
 
 template<typename T> uint8_t* write(const T& n, uint8_t* data) {
@@ -185,9 +202,9 @@ size_t write_poly_file(const Keys& kTable, const std::string& fname, bool full) 
     return size;
 }
 
-void sort_by_frequency(Keys& kTable, size_t start, size_t end) {
+size_t sort_by_frequency(Keys& kTable, size_t start, size_t end) {
 
-    Keys metaTable;
+//    Keys metaTable;
     std::map<PMove, int> moves;
 
     for (size_t i = start; i < end; ++i)
@@ -200,12 +217,12 @@ void sort_by_frequency(Keys& kTable, size_t start, size_t end) {
 
         // For (positions, moves) with many games, build a meta information
         // summary to speed up probing.
-        if (moves[kTable[i].move] > 1024)
-        {
-            uint32_t learn = (MOVE_TOTAL & 0xF) << 28;
-            learn |= moves[kTable[i].move] & 0xFFFFFFF;
-            metaTable.push_back({kTable[i].key, MOVE_NONE, kTable[i].move, learn});
-        }
+//        if (moves[kTable[i].move] > 1024)
+//        {
+//            uint32_t learn = (MOVE_TOTAL & 0xF) << 28;
+//            learn |= moves[kTable[i].move] & 0xFFFFFFF;
+//            metaTable.push_back({kTable[i].key, MOVE_NONE, kTable[i].move, learn});
+//        }
     }
 
     std::sort(kTable.begin() + start, kTable.begin() + end,
@@ -215,8 +232,10 @@ void sort_by_frequency(Keys& kTable, size_t start, size_t end) {
               || (a.weight == b.weight && a.move > b.move);
     });
 
-    if (!metaTable.empty())
-        kTable.insert(kTable.begin() + start, metaTable.begin(), metaTable.end());
+//    if (!metaTable.empty())
+//        kTable.insert(kTable.begin() + start, metaTable.begin(), metaTable.end());
+
+    return end/* + metaTable.size()*/;
 }
 
 inline PMove to_polyglot(Move m) {
@@ -658,7 +677,7 @@ void make_book(std::istringstream& is) {
         if (kTable[idx].key != kTable[idx - 1].key)
         {
             if (idx - last > 2)
-                sort_by_frequency(kTable, last, idx);
+                idx = sort_by_frequency(kTable, last, idx);
 
             last = idx;
             uniqueKeys++;
@@ -685,6 +704,35 @@ void make_book(std::istringstream& is) {
               << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
 }
 
+
+void probe_key(std::vector<std::string>& json_moves, const std::string& fName, size_t ofs) {
+
+    std::ifstream ifs(fName.c_str(), std::ifstream::in | std::ifstream::binary);
+
+    if (!ifs.is_open())
+        return;
+
+    ifs.seekg(ofs, std::ios_base::beg);
+
+    PolyEntry e;
+    read_entry(e, ifs);
+    Key key = e.key;
+
+    do {
+        PMove move = e.move;
+        std::string str("\"" + UCI::move(Move(e.move), false) + "\": ");
+        str += "\"" + std::to_string(e.weight) + "\"";
+        json_moves.push_back(str);
+
+        do
+            read_entry(e, ifs);
+        while (e.move == move);
+
+    } while (key == e.key);
+
+    ifs.close();
+}
+
 void find(std::istringstream& is) {
 
     PolyglotBook book;
@@ -709,9 +757,25 @@ void find(std::istringstream& is) {
 
     StateInfo st;
     RootPos.set(fenStr, false, &st);
-    size_t ofs = book.probe(RootPos.key(), bookName.c_str());
-    std::cerr << "Key: " << RootPos.key()
-              << "\nOffset: " << ofs << std::endl;
+    size_t ofs = book.probe(RootPos.key(), bookName);
+    std::vector<std::string> json_moves;
+    probe_key(json_moves, bookName, ofs);
+
+    // Output probing info in JSON format
+    std::string tab = "\n    ";
+    std::string indent8 = "        ";
+    std::stringstream json;
+    json << "{"
+         << tab << "\"fen\": \"" << RootPos.fen() << "\","
+         << tab << "\"key\": " << RootPos.key() << ","
+         << tab << "\"ofset\": " << ofs << ","
+         << tab << "\"moves\": [";
+
+    for (auto& m : json_moves)
+        json << tab << "   {" << tab << indent8 << m << tab << "   },";
+
+    json << tab << "]\n}";
+    std::cerr << json.str() << std::endl;
 }
 
 }
