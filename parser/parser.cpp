@@ -275,8 +275,14 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
     // easy counting of result statistics.
     //
     // Result is coded from 0 to 3 as WHITE_WIN, BLACK_WIN, DRAW, RESULT_UNKNOWN
-    int result = data ? (*(data-1) - '0') : 3;
-    const uint32_t learn =  ((uint32_t(result) & 3) << 31)
+    // *(data-2) contains the last digit in a result, e.g. 1-0, 0-1, 1/2-1/2, *
+    int result = data ? (*(data-2) - '0') : 3;
+    // In case of * or any unknown result char, set it to RESULT_UNKNOWN or 3
+    if (result<0 || result>2) {
+        result = 3;
+    }
+    // upper 2 bits out of 32 bits store the result
+    const uint32_t learn =  ((uint32_t(result) & 3) << 30)
                           | (((data - (const char*)baseAddress) >> 3) & 0x3FFFFFFF);
     while (cur < end)
     {
