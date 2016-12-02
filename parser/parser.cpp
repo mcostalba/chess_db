@@ -729,10 +729,15 @@ void probe_key(std::vector<std::string>& json_moves, const std::string& fName, s
         PMove move = e.move;
         std::string str("\"move\": \"" + UCI::move(Move(e.move), false) + "\", \"weight\": ");
         str += std::to_string(e.weight);
-        int64_t results[4] = {};
+        int cnt = 10;
+        uint64_t pgn_ofs[10];
+        uint64_t results[4] = {};
 
         do {
             results[(e.learn >> 30) & 3]++;
+            if (cnt)
+                pgn_ofs[10 - cnt--] = (e.learn & 0x3FFFFFFF) << 3;
+
             read_entry(e, ifs);
         }
         while (e.move == move);
@@ -742,7 +747,18 @@ void probe_key(std::vector<std::string>& json_moves, const std::string& fName, s
         str +=  ", \"games\": "  + std::to_string(results[0] + results[1] + results[2])
               + ", \"wins\": "   + std::to_string(results[0])
               + ", \"losses\": " + std::to_string(results[1])
-              + ", \"draws\": "  + std::to_string(results[2]);
+              + ", \"draws\": "  + std::to_string(results[2])
+              + ", \"pgn offsets\": [";
+
+        for (int i = 0; i < 10 - cnt; i++)
+        {
+            if (i)
+               str += ", ";
+
+            str += std::to_string(pgn_ofs[i]);
+        }
+
+        str += "]";
 
         json_moves.push_back(str);
 
