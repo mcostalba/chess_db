@@ -277,10 +277,11 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
     // Result is coded from 0 to 3 as WHITE_WIN, BLACK_WIN, DRAW, RESULT_UNKNOWN
     // *(data-2) contains the last digit in a result, e.g. 1-0, 0-1, 1/2-1/2, *
     int result = data ? (*(data-2) - '0') : 3;
+
     // In case of * or any unknown result char, set it to RESULT_UNKNOWN or 3
-    if (result < 0 || result > 2) {
+    if (result < 0 || result > 2)
         result = 3;
-    }
+
     // upper 2 bits out of 32 bits store the result
     const uint32_t learn =  ((uint32_t(result) & 3) << 30)
                           | (((data - (const char*)baseAddress) >> 3) & 0x3FFFFFFF);
@@ -725,41 +726,23 @@ void probe_key(std::vector<std::string>& json_moves, const std::string& fName, s
     Key key = e.key;
 
     do {
-        int64_t total_games = 0;
-        int64_t num_draws = 0;
-        int64_t num_white_wins = 0;
-        int64_t num_white_losses = 0;
-        short result;
-
         PMove move = e.move;
         std::string str("\"move\": \"" + UCI::move(Move(e.move), false) + "\", \"weight\": ");
         str += std::to_string(e.weight);
+        int64_t results[4] = {};
 
         do {
-            // Get result from first 2 bits of e.learn
-            result = ((e.learn >> 30) & ((1 << 2)-1));
-
-            if (result == 0) {
-                ++num_white_wins;
-            }
-            else if (result == 1) {
-                ++num_white_losses;
-            }
-            else if (result == 2) {
-                ++num_draws;
-            }
-
-            ++total_games;
+            results[(e.learn >> 30) & 3]++;
             read_entry(e, ifs);
-
         }
         while (e.move == move);
 
-        // Note that this output will only make sense if the parser is run in full mode, if not, there will always be one game, one win, and 0 draws and 0 losses
-        str += ", \"games\": " + std::to_string(total_games);
-        str += ", \"wins\": " + std::to_string(num_white_wins);
-        str += ", \"draws\": " + std::to_string(num_draws);
-        str += ", \"losses\": " + std::to_string(num_white_losses);
+        // Note that this output will only make sense if the parser is run in full mode,
+        // if not, there will always be one game, one win, and 0 draws and 0 losses.
+        str +=  ", \"games\": "  + std::to_string(results[0] + results[1] + results[2])
+              + ", \"wins\": "   + std::to_string(results[0])
+              + ", \"losses\": " + std::to_string(results[1])
+              + ", \"draws\": "  + std::to_string(results[2]);
 
         json_moves.push_back(str);
 
