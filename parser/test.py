@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import ast
 import glob
 import os
 import sys
@@ -35,6 +36,27 @@ DB = {'GM_games'               : {'games':  20, 'moves':  1519, 'fixed':  0},
       'semicomm'               : {'games':  46, 'moves':  3004, 'fixed':  1}}
 
 
+FIND_TEST = {
+    'romero.bin' : {'input': "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                    'output':
+            {
+                "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                "key": 5060803636482931868,
+                "ofset": 1824,
+                "moves": [
+                    {
+                        "move": "e2e4", "weight": 49151, "games": 3, "wins": 1, "losses": 2, "draws": 0, "pgn offsets": [1688, 8200, 5176]
+                    },
+                    {
+                        "move": "d2d4", "weight": 16383, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": [3656]
+                    },
+                ]
+            }
+
+    }
+}
+
+
 def check_result(output, fname, stats):
     fname = os.path.splitext(fname)[0]
     games = output.split('Games: ')
@@ -56,14 +78,20 @@ def check_result(output, fname, stats):
         ok3 = DB[fname]['fixed'] == fixed
         return 'OK' if ok1 and ok2 and ok3 else 'FAIL'
 
-
 def run_file(file, stats):
     fname = os.path.basename(file)
     sys.stdout.write('Processing ' + fname + '...')
     sys.stdout.flush()
-    output = qx(["./parser", 'book', file], stderr=STDOUT)
+    output = qx(["./parser", 'book', file, 'full'], stderr=STDOUT)
     result = check_result(output, fname, stats)
     print(result)
+
+def run_find_test(fname, expected_output):
+    sys.stdout.write('Processing ' + fname + ' for find test')
+    output = qx(["./parser", 'find', fname, expected_output['input']], stderr=STDOUT)
+    assert ast.literal_eval(output) == expected_output['output']
+    sys.stdout.write('...OK')
+    sys.stdout.flush()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run test on pgn files')
@@ -78,6 +106,9 @@ if __name__ == "__main__":
     files = sorted(glob.glob(args.dir + '/*.pgn'))
     for fn in files:
         run_file(fn, stats)
+
+    for k,v in FIND_TEST.items():
+        run_find_test(args.dir+k, v)
 
     print("\ngames {}, moves {}, fixed {}\n"
           .format(stats['games'], stats['moves'], stats['fixed']))

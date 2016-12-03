@@ -712,7 +712,7 @@ void make_book(std::istringstream& is) {
 }
 
 
-void probe_key(std::vector<std::string>& json_moves, const std::string& fName, size_t ofs) {
+void probe_key(std::vector<std::string>& json_moves, const std::string& fName, size_t ofs, int maxGameOffsets) {
 
     std::ifstream ifs(fName.c_str(), std::ifstream::in | std::ifstream::binary);
 
@@ -729,14 +729,14 @@ void probe_key(std::vector<std::string>& json_moves, const std::string& fName, s
         PMove move = e.move;
         std::string str("\"move\": \"" + UCI::move(Move(e.move), false) + "\", \"weight\": ");
         str += std::to_string(e.weight);
-        int cnt = 10;
-        uint64_t pgn_ofs[10];
+        int cnt = maxGameOffsets;
+        uint64_t pgn_ofs[maxGameOffsets];
         uint64_t results[4] = {};
 
         do {
             results[(e.learn >> 30) & 3]++;
             if (cnt)
-                pgn_ofs[10 - cnt--] = (e.learn & 0x3FFFFFFF) << 3;
+                pgn_ofs[maxGameOffsets - cnt--] = (e.learn & 0x3FFFFFFF) << 3;
 
             read_entry(e, ifs);
         }
@@ -744,13 +744,13 @@ void probe_key(std::vector<std::string>& json_moves, const std::string& fName, s
 
         // Note that this output will only make sense if the parser is run in full mode,
         // if not, there will always be one game, one win, and 0 draws and 0 losses.
-        str +=  ", \"games\": "  + std::to_string(results[0] + results[1] + results[2])
+        str +=  ", \"games\": "  + std::to_string(results[0] + results[1] + results[2] + results[3])
               + ", \"wins\": "   + std::to_string(results[0])
               + ", \"losses\": " + std::to_string(results[1])
               + ", \"draws\": "  + std::to_string(results[2])
               + ", \"pgn offsets\": [";
 
-        for (int i = 0; i < 10 - cnt; i++)
+        for (int i = 0; i < maxGameOffsets - cnt; i++)
         {
             if (i)
                str += ", ";
@@ -770,8 +770,8 @@ void probe_key(std::vector<std::string>& json_moves, const std::string& fName, s
 void find(std::istringstream& is) {
 
     PolyglotBook book;
-    std::string bookName, token, fenStr;
-
+    std::string bookName, token, fenStr, maxGameOffsetsStr;
+    int maxGameOffsets = 10;
     is >> bookName;
 
     if (bookName.empty())
@@ -780,9 +780,20 @@ void find(std::istringstream& is) {
         exit(0);
     }
 
-    while (is >> token)
-        fenStr += token + " ";
+    while (is >> token) {
+        if ("max_game_offsets" == token) {
+            is >> token;
+            maxGameOffsets = std::stoi(token);
+            if (maxGameOffsets > 3000 || maxGameOffsets < 1) {
+                std::cerr << "maxGameOffsets must be between 1 and 3000" << std::endl;
+                exit(0);
+            }
+        }
+        else {
 
+            fenStr += token + " ";
+        }
+    }
     if (fenStr.empty())
     {
         std::cerr << "Missing FEN string..." << std::endl;
@@ -793,7 +804,7 @@ void find(std::istringstream& is) {
     RootPos.set(fenStr, false, &st);
     size_t ofs = book.probe(RootPos.key(), bookName);
     std::vector<std::string> json_moves;
-    probe_key(json_moves, bookName, ofs);
+    probe_key(json_moves, bookName, ofs, maxGameOffsets);
 
     // Output probing info in JSON format
     std::string tab = "\n    ";
