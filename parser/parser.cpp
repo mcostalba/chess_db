@@ -204,7 +204,6 @@ size_t write_poly_file(const Keys& kTable, const std::string& fname, bool full) 
 
 size_t sort_by_frequency(Keys& kTable, size_t start, size_t end) {
 
-//    Keys metaTable;
     std::map<PMove, int> moves;
 
     for (size_t i = start; i < end; ++i)
@@ -212,18 +211,7 @@ size_t sort_by_frequency(Keys& kTable, size_t start, size_t end) {
 
     // Normalize weights to be stored in a uint16_t, so that 100% -> 0xFFFF
     for (size_t i = start; i < end; ++i)
-    {
         kTable[i].weight = moves[kTable[i].move] * 0xFFFF / (end - start);
-
-        // For (positions, moves) with many games, build a meta information
-        // summary to speed up probing.
-//        if (moves[kTable[i].move] > 1024)
-//        {
-//            uint32_t learn = (MOVE_TOTAL & 0xF) << 28;
-//            learn |= moves[kTable[i].move] & 0xFFFFFFF;
-//            metaTable.push_back({kTable[i].key, MOVE_NONE, kTable[i].move, learn});
-//        }
-    }
 
     std::sort(kTable.begin() + start, kTable.begin() + end,
               [](const PolyEntry& a, const PolyEntry& b) -> bool
@@ -232,10 +220,7 @@ size_t sort_by_frequency(Keys& kTable, size_t start, size_t end) {
               || (a.weight == b.weight && a.move > b.move);
     });
 
-//    if (!metaTable.empty())
-//        kTable.insert(kTable.begin() + start, metaTable.begin(), metaTable.end());
-
-    return end/* + metaTable.size()*/;
+    return end;
 }
 
 inline PMove to_polyglot(Move m) {
