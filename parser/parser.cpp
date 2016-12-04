@@ -816,7 +816,6 @@ void find(std::istringstream& is) {
     json << "{"
          << tab << "\"fen\": \"" << RootPos.fen() << "\","
          << tab << "\"key\": " << RootPos.key() << ","
-         << tab << "\"ofset\": " << ofs << ","
          << tab << "\"moves\": [";
 
     for (auto& m : json_moves)

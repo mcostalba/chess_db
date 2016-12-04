@@ -42,7 +42,6 @@ FIND_TEST = {
             {
                 "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
                 "key": 5060803636482931868,
-                "ofset": 1824,
                 "moves": [
                     {
                         "move": "e2e4", "weight": 49151, "games": 3, "wins": 1, "losses": 2, "draws": 0, "pgn offsets": [1688, 8200, 5176]
