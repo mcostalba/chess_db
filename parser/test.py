@@ -37,7 +37,8 @@ DB = {'GM_games'               : {'games':  20, 'moves':  1519, 'fixed':   0},
 
 
 FIND_TEST = {
-    'romero.bin' : {'input': "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    'romero.bin' : {
+        "input": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
                     'output':
             {
                 "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
@@ -48,6 +49,23 @@ FIND_TEST = {
                     },
                     {
                         "move": "d2d4", "weight": 16383, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": [3656]
+                    },
+                ]
+            }
+
+    },
+    'hayes.bin' : {
+        "input": "max_game_offsets 1 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        'output':
+            {
+                "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                "key": 5060803636482931868,
+                "moves": [
+                    {
+                        "move": "e2e4", "weight": 36408, "games": 5, "wins": 1, "losses": 4, "draws": 0, "pgn offsets": [11576]
+                    },
+                    {
+                        "move": "d2d4", "weight": 29126, "games": 4, "wins": 1, "losses": 3, "draws": 0, "pgn offsets": [14368]
                     },
                 ]
             }
@@ -90,8 +108,11 @@ def run_file(file, stats):
 def run_find_test(fname, expected_output):
     sys.stdout.write('Processing ' + fname + ' for find test')
     output = qx(["./parser", 'find', fname, expected_output['input']], stderr=STDOUT)
+
+    # print("output:")
+    # print(output)
     assert ast.literal_eval(output) == expected_output['output']
-    sys.stdout.write('...OK')
+    sys.stdout.write('...OK\n')
     sys.stdout.flush()
 
 
