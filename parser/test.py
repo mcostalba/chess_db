@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
-import ast
 import glob
+import json
 import os
 import sys
 from subprocess import STDOUT, check_output as qx
@@ -111,7 +111,7 @@ def run_find_test(fname, expected_output):
 
     # print("output:")
     # print(output)
-    assert ast.literal_eval(output) == expected_output['output']
+    assert json.loads(output) == expected_output['output']
     sys.stdout.write('...OK\n')
     sys.stdout.flush()
 

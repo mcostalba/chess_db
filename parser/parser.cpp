@@ -803,8 +803,12 @@ void find(std::istringstream& is) {
          << tab << "\"key\": " << RootPos.key() << ","
          << tab << "\"moves\": [";
 
+    std::string comma;
     for (auto& m : json_moves)
-        json << tab << "   {" << tab << indent8 << m << tab << "   },";
+    {
+        json << comma << tab << "   {" << tab << indent8 << m << tab << "   }";
+        comma = ",";
+    }
 
     json << tab << "]\n}";
     std::cerr << json.str() << std::endl;

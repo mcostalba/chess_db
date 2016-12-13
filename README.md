@@ -21,5 +21,21 @@ Example:
 
 `parser find ../pgn/hayes.bin max_game_offsets 2 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
 
+Output will be:
+
+~~~
+{
+    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "key": 5060803636482931868,
+    "moves": [
+       {
+            "move": "e2e4", "weight": 36408, "games": 5, "wins": 1, "losses": 4, "draws": 0, "pgn offsets": [11576, 17728]
+       },
+       {
+            "move": "d2d4", "weight": 29126, "games": 4, "wins": 1, "losses": 3, "draws": 0, "pgn offsets": [14368, 20176]
+       }
+    ]
+}
+~~~
 
 
