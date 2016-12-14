@@ -668,6 +668,12 @@ void make_book(std::istringstream& is) {
 
     unmap(baseAddress, mapping);
 
+    if (!stats.games)
+    {
+        std::cerr << "done\nNo valid games found!";
+        return;
+    }
+
     std::cerr << "done\nSorting...";
 
     std::sort(kTable.begin(), kTable.end());
