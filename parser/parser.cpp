@@ -58,16 +58,17 @@ struct Stats {
 enum Token {
     T_NONE, T_SPACES, T_RESULT, T_MINUS, T_DOT, T_QUOTES, T_DOLLAR,
     T_LEFT_BRACKET, T_RIGHT_BRACKET, T_LEFT_BRACE, T_RIGHT_BRACE,
-    T_LEFT_PARENTHESIS, T_RIGHT_PARENTHESIS, T_ZERO, T_DIGIT, T_MOVE_HEAD, TOKEN_NB
+    T_LEFT_PARENTHESIS, T_RIGHT_PARENTHESIS, T_EVENT, T_ZERO, T_DIGIT,
+    T_MOVE_HEAD, TOKEN_NB
 };
 
 enum State {
     HEADER, TAG, FEN_TAG, BRACE_COMMENT, VARIATION, NUMERIC_ANNOTATION_GLYPH,
-    NEXT_MOVE, MOVE_NUMBER, NEXT_SAN, READ_SAN, RESULT, STATE_NB
+    NEXT_MOVE, MOVE_NUMBER, NEXT_SAN, READ_SAN, RESULT, SKIP_GAME, STATE_NB
 };
 
 enum Step : uint8_t {
-    FAIL, CONTINUE, OPEN_TAG, OPEN_BRACE_COMMENT, READ_FEN, CLOSE_FEN_TAG,
+    FAIL, CONTINUE, GAME_START, OPEN_TAG, OPEN_BRACE_COMMENT, READ_FEN, CLOSE_FEN_TAG,
     OPEN_VARIATION, START_NAG, POP_STATE, START_MOVE_NUMBER, START_NEXT_SAN,
     CASTLE_OR_RESULT, START_READ_SAN, READ_MOVE_CHAR, END_MOVE, START_RESULT,
     END_GAME, TAG_IN_BRACE, MISSING_RESULT
@@ -325,6 +326,14 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
         case CONTINUE:
             break;
 
+        case GAME_START:
+            if (!strncmp(data-1, "[Event ", 7))
+            {
+                data -= 2;
+                state = ToStep[HEADER];
+            }
+            break;
+
         case OPEN_TAG:
             *stateSp++ = state;
             if (*(data + 1) == 'F' && !strncmp(data+1, "FEN \"", 5))
@@ -335,11 +344,9 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             else if (   *(data + 1) == 'V'
                      && !strncmp(data+1, "Variant ", 8)
                      &&  strncmp(data+1, "Variant \"Standard\"", 18))
-            {
-                data = strstr(data, "\n[Event "); // Skip to next game
-                state = ToStep[HEADER];
-                if (!data)
-                    data = eof;
+           {
+                --stateSp; // Pop state, we are inside brackets
+                state = ToStep[SKIP_GAME];
             }
             else
                 state = ToStep[TAG];
@@ -453,7 +460,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
     // Force accounting of last game if still pending. Many reason for this to
     // trigger: no newline at EOF, missing result, missing closing brace, etc.
-    if (state != ToStep[HEADER] && end - moves)
+    if (state != ToStep[HEADER] && state != ToStep[SKIP_GAME] && end - moves)
     {
         parse_game(moves, end, kTable, fen, fenEnd, fixed, data, baseAddress);
         gameCnt++;
@@ -499,6 +506,7 @@ void init() {
     ToToken['}'] = T_RIGHT_BRACE;
     ToToken['('] = T_LEFT_PARENTHESIS;
     ToToken[')'] = T_RIGHT_PARENTHESIS;
+    ToToken['E'] = T_EVENT;
     ToToken['0'] = T_ZERO;
     ToToken['1'] = ToToken['2'] = ToToken['3'] =
     ToToken['4'] = ToToken['5'] = ToToken['6'] = ToToken['7'] =
@@ -632,6 +640,14 @@ void init() {
         ToStep[RESULT][i] = CONTINUE;
 
     ToStep[RESULT][T_SPACES] = END_GAME;
+
+    // STATE = SKIP_GAME
+    //
+    // Ignore anything until start of next game
+    for (int i = 0; i < TOKEN_NB; i++)
+        ToStep[SKIP_GAME][i] = CONTINUE;
+
+    ToStep[SKIP_GAME][T_EVENT] = GAME_START;
 }
 
 void make_book(std::istringstream& is) {
