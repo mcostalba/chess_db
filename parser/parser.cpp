@@ -332,7 +332,9 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 data += 5;
                 state = ToStep[FEN_TAG];
             }
-            else if (*(data + 1) == 'V' && !strncmp(data+1, "Variant ", 8))
+            else if (   *(data + 1) == 'V'
+                     && !strncmp(data+1, "Variant ", 8)
+                     &&  strncmp(data+1, "Variant \"Standard\"", 18))
             {
                 data = strstr(data, "\n[Event "); // Skip to next game
                 state = ToStep[HEADER];
