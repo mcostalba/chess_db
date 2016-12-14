@@ -327,12 +327,20 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
         case OPEN_TAG:
             *stateSp++ = state;
-            state =   *(  data + 1) == 'F'
-                   && *(++data + 1) == 'E'
-                   && *(++data + 1) == 'N'
-                   && *(++data + 1) == ' '
-                   && *(++data + 1) == '"'
-                   &&   ++data ? ToStep[FEN_TAG] : ToStep[TAG];
+            if (*(data + 1) == 'F' && !strncmp(data+1, "FEN \"", 5))
+            {
+                data += 5;
+                state = ToStep[FEN_TAG];
+            }
+            else if (*(data + 1) == 'V' && !strncmp(data+1, "Variant ", 8))
+            {
+                data = strstr(data, "\n[Event "); // Skip to next game
+                state = ToStep[HEADER];
+                if (!data)
+                    data = eof;
+            }
+            else
+                state = ToStep[TAG];
             break;
 
         case OPEN_BRACE_COMMENT:
