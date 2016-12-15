@@ -235,7 +235,7 @@ inline PMove to_polyglot(Move m) {
     // move is a promotion, we have to convert it to our representation and in
     // all other cases, we can directly compare with a Move after having masked
     // out the special Move flags (bit 14-15) that are not supported by PolyGlot.
-    if (m & PROMOTION)
+    if (type_of(m) == PROMOTION)
         return PMove((m & 0xFFF) | ((promotion_type(m) - 1) << 12));
 
     return PMove(m & 0x3FFF);
