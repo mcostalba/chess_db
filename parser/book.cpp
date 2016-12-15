@@ -89,7 +89,7 @@ size_t PolyglotBook::find_first(Key key, bool* found) {
 
   seekg(0, ios::end); // Move pointer to end, so tellg() gets file's size
 
-  size_t low = 0, mid, high = (size_t)tellg() / SizeOfPolyEntry - 1;
+  size_t ofs, low = 0, mid, high = (size_t)tellg() / SizeOfPolyEntry - 1;
   PolyEntry e = PolyEntry();
 
   assert(low <= high);
@@ -111,6 +111,9 @@ size_t PolyglotBook::find_first(Key key, bool* found) {
 
   assert(low == high);
 
+  ofs = low * SizeOfPolyEntry;
+  seekg(ofs, std::ios_base::beg);
+  *this >> e;
   *found = key == e.key;
-  return low * SizeOfPolyEntry;
+  return ofs;
 }
