@@ -343,8 +343,8 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             }
             else if (   *(data + 1) == 'V'
                      && !strncmp(data+1, "Variant ", 8)
-                     &&  strncmp(data+1, "Variant \"Standard\"", 18))
-           {
+                     &&  strncmp(data+9, "\"Standard\"", 10))
+            {
                 --stateSp; // Pop state, we are inside brackets
                 state = ToStep[SKIP_GAME];
             }
