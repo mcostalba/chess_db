@@ -68,17 +68,14 @@ bool PolyglotBook::open(const char* fName) {
 }
 
 
-/// probe() tries to find a book move for the given position. If no move is
-/// found, it returns MOVE_NONE. If pickBest is true, then it always returns
-/// the highest-rated move, otherwise it randomly chooses one based on the
-/// move score.
+/// probe() tries to find a book move for the given position
 
-size_t PolyglotBook::probe(Key key, const string& fName) {
+size_t PolyglotBook::probe(Key key, const string& fName, bool* found) {
 
   if (fileName != fName && !open(fName.c_str()))
       return 0;
 
-  size_t ofs = find_first(key);
+  size_t ofs = find_first(key, found);
   close();
   return ofs;
 }
@@ -88,12 +85,12 @@ size_t PolyglotBook::probe(Key key, const string& fName) {
 /// the book file for the given key. Returns the index of the leftmost book
 /// entry with the same key as the input.
 
-size_t PolyglotBook::find_first(Key key) {
+size_t PolyglotBook::find_first(Key key, bool* found) {
 
   seekg(0, ios::end); // Move pointer to end, so tellg() gets file's size
 
   size_t low = 0, mid, high = (size_t)tellg() / SizeOfPolyEntry - 1;
-  PolyEntry e;
+  PolyEntry e = PolyEntry();
 
   assert(low <= high);
 
@@ -114,5 +111,6 @@ size_t PolyglotBook::find_first(Key key) {
 
   assert(low == high);
 
+  *found = key == e.key;
   return low * SizeOfPolyEntry;
 }

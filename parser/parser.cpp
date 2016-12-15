@@ -729,7 +729,8 @@ void make_book(std::istringstream& is) {
 }
 
 
-void probe_key(std::vector<std::string>& json_moves, const std::string& fName, size_t ofs, size_t maxGameOffsets) {
+void probe_key(std::vector<std::string>& json_moves, const std::string& fName,
+               size_t ofs, size_t maxGameOffsets) {
 
     std::ifstream ifs(fName.c_str(), std::ifstream::in | std::ifstream::binary);
 
@@ -790,7 +791,7 @@ void probe_key(std::vector<std::string>& json_moves, const std::string& fName, s
 void find(std::istringstream& is) {
 
     PolyglotBook book;
-    std::string bookName, token, fenStr, maxGameOffsetsStr;
+    std::string bookName, token, fenStr;
     size_t maxGameOffsets = 10;
     is >> bookName;
 
@@ -822,9 +823,11 @@ void find(std::istringstream& is) {
 
     StateInfo st;
     RootPos.set(fenStr, false, &st);
-    size_t ofs = book.probe(RootPos.key(), bookName);
+    bool found;
+    size_t ofs = book.probe(RootPos.key(), bookName, &found);
     std::vector<std::string> json_moves;
-    probe_key(json_moves, bookName, ofs, maxGameOffsets);
+    if (found)
+        probe_key(json_moves, bookName, ofs, maxGameOffsets);
 
     // Output probing info in JSON format
     std::string tab = "\n    ";

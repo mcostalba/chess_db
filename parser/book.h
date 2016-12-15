@@ -29,13 +29,13 @@
 class PolyglotBook : private std::ifstream {
 public:
  ~PolyglotBook();
-  size_t probe(Key key, const std::string& fName);
+  size_t probe(Key key, const std::string& fName, bool* found);
 
 private:
   template<typename T> PolyglotBook& operator>>(T& n);
 
   bool open(const char* fName);
-  size_t find_first(Key key);
+  size_t find_first(Key key, bool* found);
 
   std::string fileName;
 };
