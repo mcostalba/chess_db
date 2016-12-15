@@ -262,7 +262,8 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
     //
     // Result is coded from 0 to 3 as WHITE_WIN, BLACK_WIN, DRAW, RESULT_UNKNOWN
     // *(data-2) contains the last digit in a result, e.g. 1-0, 0-1, 1/2-1/2, *
-    int result = data ? (*(data-2) - '0') : 3;
+    bool cr = data && *(data-1) == 13; //Carriage return
+    int result = data ? (*(data - 1 - cr) - '0') : 3;
 
     // In case of * or any unknown result char, set it to RESULT_UNKNOWN or 3
     if (result < 0 || result > 2)
