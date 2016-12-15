@@ -188,7 +188,8 @@ size_t write_poly_file(const Keys& kTable, const std::string& fname, bool full) 
     std::ofstream ofs;
     ofs.open(fname, std::ofstream::out | std::ofstream::binary);
 
-    const PolyEntry* prev = &kTable[0];
+    const PolyEntry dummy = PolyEntry();
+    const PolyEntry* prev = &dummy;
 
     for (const PolyEntry& e : kTable)
         if (e.key != prev->key || e.move != prev->move || full)
