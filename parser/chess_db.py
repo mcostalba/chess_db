@@ -10,28 +10,23 @@ PGN_HEADERS_REGEX = re.compile(r"\[([A-Za-z0-9_]+)\s+\"(.*)\"\]")
 FIND_OUTPUT_REGEX = re.compile(r"}$")
 BOOK_MAKE_DONE_REGEX = re.compile(r"Processing time \(ms\):[^$]+$")
 
-class ChessDB:
+
+class Parser:
     def __init__(self, engine=''):
         if not engine:
             engine = './parser'
         self.p = PopenSpawn(engine, encoding="utf-8")
-
         self.pgn = ''
         self.db = ''
 
-    def wait_done(self):
-        self.p.expect(FIND_OUTPUT_REGEX)
-
-    def open(self, pgn, force=False):
-        '''Open a PGN file and create an index if not existing or if 'force'
-           is set.'''
+    def open(self, pgn, full=True):
+        '''Open a PGN file and create an index if not exsisting'''
         if not os.path.isfile(pgn):
             raise NameError("File {} does not exsist".format(pgn))
         self.pgn = pgn
         self.db = os.path.splitext(pgn)[0] + '.bin'
-        if not os.path.isfile(self.db) or force:
-            self.make(pgn)
-            self.db = os.path.splitext(pgn)[0] + '.bin'
+        if not os.path.isfile(self.db):
+            self.db = self.make(full)
 
     def close(self):
         '''Terminate chess_db. Not really needed: engine will terminate as
@@ -41,63 +36,68 @@ class ChessDB:
         self.pgn = ''
         self.db = ''
 
-    def make(self, pgn):
-        '''Make an index out of a pgn file. Normally called by open()'''
-        self.p.sendline('book ' + pgn +' full')
+    def make(self, full=True):
+        '''Make an index out of a pgn file'''
+        if not self.p or not self.pgn:
+            raise NameError("Unknown DB, first open a PGN file")
+        cmd = 'book ' + self.pgn
+        if full:
+            cmd += ' full'
+        self.p.sendline(cmd)
         self.p.expect(BOOK_MAKE_DONE_REGEX)
+        db = self.p.before.split('Book file: ')[1]
+        db = db.split()[0]
+        return db
 
     def find(self, fen, max_offsets=10):
-        '''Run query defined by 'q' dict. Result will be a dict too'''
-        if not self.db:
+        '''Find all games with positions equal to fen'''
+        if not self.db or not self.p:
             raise NameError("Unknown DB, first open a PGN file")
-        # j = json.dumps(q)
-        cmd = 'find ' + self.db + ' max_game_offsets ' + str(max_offsets) + ' ' + fen
-        # print("cmd: {0}".format(cmd))
-        self.p.sendline(cmd)
-        self.wait_done()
+        cmd = 'find ' + self.db + ' max_game_offsets ' + str(max_offsets) + ' '
+        self.p.sendline(cmd + fen)
+        self.p.expect(FIND_OUTPUT_REGEX)
         result = self.p.before + "}"
         self.p.before = ''
-        return result
+        return json.loads(result)
 
+    def get_games(self, list):
+        '''Retrieve the PGN games specified in the offsets list'''
+        if not self.pgn:
+            raise NameError("Unknown DB, first open a PGN file")
+        pgn = []
+        with open(self.pgn, "r") as f:
+            for ofs in list:
+                f.seek(ofs)
+                game = ''
+                for line in f:
+                    if line.startswith('[Event "'):
+                        if game:
+                            break  # Second one, start of next game
+                        else:
+                            game = line  # First occurence
+                    elif game:
+                        game += line
+                pgn.append(game.strip())
+        return pgn
 
-    # TODO: Change all game api to support backward seek
-    # def get_games(self, result):
-    #     '''Retrieve the PGN games specified in the offsets list. Games are
-    #        added to each list entry with a 'pgn' key'''
-    #     if not self.pgn:
-    #         raise NameError("Unknown DB, first open a PGN file")
-    #     with open(self.pgn, "r") as f:
-    #         for match in result["moves"]:
-    #             f.seek(match['pgn offsets'][0])
-    #             game = ''
-    #             for line in f:
-    #                 if "[Event" in line and game.strip():
-    #                     break  # Start of next game
-    #                 game += line
-    #             print(game)
-    #             match['pgn'] = game.strip()
-    #     return matches
-    #
-    # def get_header(self, pgn):
-    #     '''Return a dict with just header information out of a pgn game. The
-    #        pgn tags are supposed to be consecutive'''
-    #     header = {}
-    #     for line in pgn.splitlines():
-    #         line = line.strip()
-    #         if line.startswith('[') and line.endswith(']'):
-    #             tag_match = PGN_HEADERS_REGEX.match(line)
-    #             if tag_match:
-    #                 header[tag_match.group(1)] = tag_match.group(2)
-    #         else:
-    #             break
-    #     return header
-    #
-    # def get_game_headers(self, matches):
-    #     '''Return a list of headers out of a list of pgn games. It is defined
-    #        to be compatible with the return value of get_games()'''
-    #     headers = []
-    #     for match in matches:
-    #         pgn = match['pgn']
-    #         h = self.get_header(pgn)
-    #         headers.append(h)
-    #     return headers
+    def get_header(self, pgn):
+        '''Return a dict with just header information out of a pgn game. The
+           pgn tags are supposed to be consecutive'''
+        header = {}
+        for line in pgn.splitlines():
+            line = line.strip()
+            if line.startswith('[') and line.endswith(']'):
+                tag_match = PGN_HEADERS_REGEX.match(line)
+                if tag_match:
+                    header[tag_match.group(1)] = tag_match.group(2)
+                else:
+                    break
+        return header
+
+    def get_game_headers(self, list):
+        '''Return a list of headers out of a list of pgn games'''
+        headers = []
+        for pgn in list:
+            h = self.get_header(pgn)
+            headers.append(h)
+        return headers

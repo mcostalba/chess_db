@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from subprocess import STDOUT, check_output as qx
+from chess_db import Parser
 
 DB = {'GM_games'               : {'games':  20, 'moves':  1519, 'fixed':   0},
       'ambiguous'              : {'games':   3, 'moves':   194, 'fixed':   2},
