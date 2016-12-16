@@ -245,7 +245,7 @@ inline PMove to_polyglot(Move m) {
 template<bool DryRun = false>
 const char* parse_game(const char* moves, const char* end, Keys& kTable,
                        const char* fen, const char* fenEnd, size_t& fixed,
-                       const char* data, const void* baseAddress) {
+                       const char* data, uint64_t gameOfs) {
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
@@ -272,7 +272,7 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
 
     // upper 2 bits out of 32 bits store the result
     const uint32_t learn =  ((uint32_t(result) & 3) << 30)
-                          | (((data - (const char*)baseAddress) >> 3) & 0x3FFFFFFF);
+                          | ((gameOfs >> 3) & 0x3FFFFFFF);
     while (cur < end)
     {
         Move move = pos.san_to_move(cur, end, fixed);
@@ -310,6 +310,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
     char moves[1024 * 8], *curMove = moves;
     char* end = curMove;
     size_t moveCnt = 0, gameCnt = 0, fixed = 0;
+    uint64_t gameOfs = 0;
     char* data = (char*)baseAddress;
     char* eof = data + size;
     int stm = WHITE;
@@ -427,8 +428,9 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 state = ToStep[RESULT];
                 break;
             }
-            parse_game(moves, end, kTable, fen, fenEnd, fixed, data, baseAddress);
+            parse_game(moves, end, kTable, fen, fenEnd, fixed, data, gameOfs);
             gameCnt++;
+            gameOfs = (data - (char*)baseAddress) + 1; // Beginning of next game
             end = curMove = moves;
             fenEnd = fen;
             state = ToStep[HEADER];
@@ -443,8 +445,9 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
              /* Fall through */
 
         case MISSING_RESULT: // Missing result, next game already started
-            parse_game(moves, end, kTable, fen, fenEnd, fixed, data, baseAddress);
+            parse_game(moves, end, kTable, fen, fenEnd, fixed, data, gameOfs);
             gameCnt++;
+            gameOfs = (data - (char*)baseAddress); // Beginning of next game
             end = curMove = moves;
             fenEnd = fen;
             state = ToStep[HEADER];
@@ -464,7 +467,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
     // trigger: no newline at EOF, missing result, missing closing brace, etc.
     if (state != ToStep[HEADER] && state != ToStep[SKIP_GAME] && end - moves)
     {
-        parse_game(moves, end, kTable, fen, fenEnd, fixed, data, baseAddress);
+        parse_game(moves, end, kTable, fen, fenEnd, fixed, data, gameOfs);
         gameCnt++;
     }
 
@@ -484,7 +487,7 @@ const char* play_game(const Position& pos, Move move, const char* cur, const cha
     p.do_move(move, st, pos.gives_check(move));
     while (*cur++) {} // Move to next move in game
     return cur < end ? parse_game<true>(cur, end, k, p.fen().c_str(),
-                                        nullptr, fixed, nullptr, nullptr) : cur;
+                                        nullptr, fixed, nullptr, 0) : cur;
 }
 
 namespace Parser {
