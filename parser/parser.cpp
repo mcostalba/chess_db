@@ -245,7 +245,7 @@ inline PMove to_polyglot(Move m) {
 template<bool DryRun = false>
 const char* parse_game(const char* moves, const char* end, Keys& kTable,
                        const char* fen, const char* fenEnd, size_t& fixed,
-                       const char* data, uint64_t gameOfs) {
+                       uint64_t gameOfs, int result) {
 
     StateInfo states[1024], *st = states;
     Position pos = RootPos;
@@ -260,15 +260,6 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
     // find game's boundaries. This allow us to index up to 8GB PGN files.
     // Result is stored in the upper 2 bits so that sorting by 'learn' allows
     // easy counting of result statistics.
-    //
-    // Result is coded from 0 to 3 as WHITE_WIN, BLACK_WIN, DRAW, RESULT_UNKNOWN
-    // *(data-2) contains the last digit in a result, e.g. 1-0, 0-1, 1/2-1/2, *
-    bool cr = data && *(data-1) == 13; //Carriage return
-    int result = data ? (*(data - 1 - cr) - '0') : 3;
-
-    // In case of * or any unknown result char, set it to RESULT_UNKNOWN or 3
-    if (result < 0 || result > 2)
-        result = 3;
 
     // upper 2 bits out of 32 bits store the result
     const uint32_t learn =  ((uint32_t(result) & 3) << 30)
@@ -302,6 +293,29 @@ const char* parse_game(const char* moves, const char* end, Keys& kTable,
     return end;
 }
 
+int get_result(const char* data) {
+
+    // Result is coded from 0 to 3 as WHITE_WIN, BLACK_WIN, DRAW, RESULT_UNKNOWN.
+    // START_RESULT is triggered by '/', '*', '0', '-'.
+    switch (*data) {
+    case '/':
+        return 2;
+    case '0':
+        return 1;
+    case '-':
+        if (    *(data-1) == '1'
+            || (*(data-1) == ' ' && *(data-2) == '1')) // Like '1 - 0'
+            return 0;
+        else if (    *(data-1) == '0'
+                 || (*(data-1) == ' ' && *(data-2) == '0'))
+            return 1;
+        break;
+    default:
+        break;
+    }
+    return 3;
+}
+
 void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
 
     Step* stateStack[16];
@@ -311,6 +325,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
     char* end = curMove;
     size_t moveCnt = 0, gameCnt = 0, fixed = 0;
     uint64_t gameOfs = 0;
+    int result = 3;
     char* data = (char*)baseAddress;
     char* eof = data + size;
     int stm = WHITE;
@@ -396,6 +411,9 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
         case CASTLE_OR_RESULT:
             if (data[2] != '0')
             {
+                assert (result == 3);
+
+                result = get_result(data);
                 state = ToStep[RESULT];
                 continue;
             }
@@ -419,6 +437,9 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
             break;
 
         case START_RESULT:
+            assert (result == 3);
+
+            result = get_result(data);
             state = ToStep[RESULT];
             break;
 
@@ -428,8 +449,9 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
                 state = ToStep[RESULT];
                 break;
             }
-            parse_game(moves, end, kTable, fen, fenEnd, fixed, data, gameOfs);
+            parse_game(moves, end, kTable, fen, fenEnd, fixed, gameOfs, result);
             gameCnt++;
+            result = 3;
             gameOfs = (data - (char*)baseAddress) + 1; // Beginning of next game
             end = curMove = moves;
             fenEnd = fen;
@@ -445,8 +467,9 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
              /* Fall through */
 
         case MISSING_RESULT: // Missing result, next game already started
-            parse_game(moves, end, kTable, fen, fenEnd, fixed, data, gameOfs);
+            parse_game(moves, end, kTable, fen, fenEnd, fixed, gameOfs, result);
             gameCnt++;
+            result = 3;
             gameOfs = (data - (char*)baseAddress); // Beginning of next game
             end = curMove = moves;
             fenEnd = fen;
@@ -467,7 +490,7 @@ void parse_pgn(void* baseAddress, uint64_t size, Stats& stats, Keys& kTable) {
     // trigger: no newline at EOF, missing result, missing closing brace, etc.
     if (state != ToStep[HEADER] && state != ToStep[SKIP_GAME] && end - moves)
     {
-        parse_game(moves, end, kTable, fen, fenEnd, fixed, data, gameOfs);
+        parse_game(moves, end, kTable, fen, fenEnd, fixed, gameOfs, result);
         gameCnt++;
     }
 
@@ -487,7 +510,7 @@ const char* play_game(const Position& pos, Move move, const char* cur, const cha
     p.do_move(move, st, pos.gives_check(move));
     while (*cur++) {} // Move to next move in game
     return cur < end ? parse_game<true>(cur, end, k, p.fen().c_str(),
-                                        nullptr, fixed, nullptr, 0) : cur;
+                                        nullptr, fixed, 0, 3) : cur;
 }
 
 namespace Parser {
