@@ -38,7 +38,7 @@ class Parser:
 
     def make(self, full=True):
         '''Make an index out of a pgn file'''
-        if not self.p or not self.pgn:
+        if not self.pgn:
             raise NameError("Unknown DB, first open a PGN file")
         cmd = 'book ' + self.pgn
         if full:
@@ -46,22 +46,21 @@ class Parser:
         self.p.sendline(cmd)
         self.p.expect(BOOK_MAKE_DONE_REGEX)
         db = self.p.before.split('Book file: ')[1]
-        db = db.split()[0]
-        return db
+        return db.split()[0]
 
     def find(self, fen, max_offsets=10):
         '''Find all games with positions equal to fen'''
         if not self.db or not self.p:
             raise NameError("Unknown DB, first open a PGN file")
-        cmd = 'find ' + self.db + ' max_game_offsets ' + str(max_offsets) + ' '
-        self.p.sendline(cmd + fen)
+        cmd = "find {} max_game_offsets {} {}".format(self.db, max_offsets, fen)
+        self.p.sendline(cmd)
         self.p.expect(FIND_OUTPUT_REGEX)
         result = self.p.before + "}"
         self.p.before = ''
         return json.loads(result)
 
     def get_games(self, list):
-        '''Retrieve the PGN games specified in the offsets list'''
+        '''Retrieve the PGN games specified in the offset list'''
         if not self.pgn:
             raise NameError("Unknown DB, first open a PGN file")
         pgn = []
