@@ -851,7 +851,7 @@ void find(std::istringstream& is) {
 
     StateInfo st;
     RootPos.set(fenStr, false, &st);
-    bool found;
+    bool found = false;
     size_t ofs = book.probe(RootPos.key(), bookName, &found);
     std::vector<std::string> json_moves;
     if (found)
