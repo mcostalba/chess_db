@@ -42,70 +42,70 @@ FIND_TEST = {
     'romero.bin' : {
         "input": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
                    u'output':
-            {
-                u"fen": u"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-                u"key": 5060803636482931868,
-                u"moves": [
-                    {
-                        u"move": u"e2e4", u"weight": 49151, u"games": 3, u"wins": 1, u"losses": 2, u"draws": 0, u"pgn offsets": [0, 3656, 5176]
-                    },
-                    {
-                        u"move": u"d2d4", u"weight": 16383, u"games": 1, u"wins": 1, u"losses": 0, u"draws": 0, u"pgn offsets": [1688]
-                    },
-                ]
-            }
+                       {
+                           "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                           "key": 5060803636482931868,
+                           "moves": [
+                              {
+                                   "move": "e2e4", "weight": 49151, "games": 3, "wins": 1, "losses": 2, "draws": 0, "pgn offsets": [0, 5176, 3656]
+                              },
+                              {
+                                   "move": "d2d4", "weight": 16383, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": [1688]
+                              }
+                           ]
+                       }
 
     },
     'hayes.bin' : {
         "input": "limit 1 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         'output':
-	{
-	    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-	    "key": 5060803636482931868,
-	    "moves": [
-	       {
-		    "move": "e2e4", "weight": 36408, "games": 5, "wins": 1, "losses": 4, "draws": 0, "pgn offsets": [0]
-	       },
-	       {
-		    "move": "d2d4", "weight": 29126, "games": 4, "wins": 1, "losses": 3, "draws": 0, "pgn offsets": [14368]
-	       }
-	    ]
-	}
+        {
+            "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "key": 5060803636482931868,
+            "moves": [
+               {
+                    "move": "e2e4", "weight": 36408, "games": 5, "wins": 1, "losses": 4, "draws": 0, "pgn offsets": [8304]
+               },
+               {
+                    "move": "d2d4", "weight": 29126, "games": 4, "wins": 1, "losses": 3, "draws": 0, "pgn offsets": [11576]
+               }
+            ]
+        }
     },
 
     'famous_games.bin' : {
         "input": "limit 2 skip 1 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         'output':
         {
-	    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-	    "key": 5060803636482931868,
-	    "moves": [
-	       {
-		    "move": "e2e4", "weight": 30015, "games": 229, "wins": 150, "losses": 71, "draws": 8, "pgn offsets": [256432, 524616]
-	       },
-	       {
-		    "move": "d2d4", "weight": 23985, "games": 183, "wins": 109, "losses": 67, "draws": 6, "pgn offsets": [465040, 166528]
-	       },
-	       {
-		    "move": "c2c4", "weight": 6160, "games": 47, "wins": 33, "losses": 12, "draws": 2, "pgn offsets": [406920, 307456]
-	       },
-	       {
-		    "move": "g1f3", "weight": 4587, "games": 35, "wins": 18, "losses": 17, "draws": 0, "pgn offsets": [379320, 712008]
-	       },
-	       {
-		    "move": "f2f4", "weight": 393, "games": 3, "wins": 1, "losses": 2, "draws": 0, "pgn offsets": [68152, 88040]
-	       },
-	       {
-		    "move": "g2g3", "weight": 131, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": []
-	       },
-	       {
-		    "move": "b2b4", "weight": 131, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": []
-	       },
-	       {
-		    "move": "b2b3", "weight": 131, "games": 1, "wins": 0, "losses": 1, "draws": 0, "pgn offsets": []
-	       }
-	    ]
-	}
+            "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "key": 5060803636482931868,
+            "moves": [
+               {
+                    "move": "e2e4", "weight": 30015, "games": 229, "wins": 150, "losses": 71, "draws": 8, "pgn offsets": [802736, 507472]
+               },
+               {
+                    "move": "d2d4", "weight": 23985, "games": 183, "wins": 109, "losses": 67, "draws": 6, "pgn offsets": [682776, 784832]
+               },
+               {
+                    "move": "c2c4", "weight": 6160, "games": 47, "wins": 33, "losses": 12, "draws": 2, "pgn offsets": [427400, 577512]
+               },
+               {
+                    "move": "g1f3", "weight": 4587, "games": 35, "wins": 18, "losses": 17, "draws": 0, "pgn offsets": [424472, 471752]
+               },
+               {
+                    "move": "f2f4", "weight": 393, "games": 3, "wins": 1, "losses": 2, "draws": 0, "pgn offsets": [88040, 68152]
+               },
+               {
+                    "move": "g2g3", "weight": 131, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": []
+               },
+               {
+                    "move": "b2b4", "weight": 131, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": []
+               },
+               {
+                    "move": "b2b3", "weight": 131, "games": 1, "wins": 0, "losses": 1, "draws": 0, "pgn offsets": []
+               }
+            ]
+        }
     }
 }
 
@@ -149,12 +149,9 @@ def run_find_test(fname, expected_output):
     sys.stdout.write('Processing ' + fname + ' for find test')
     output = qx(["./parser", 'find', fname, expected_output['input']], stderr=STDOUT)
 
-    
+
     output = json.dumps(json.loads(output), sort_keys=True)
-    expected_result = json.dumps(expected_output['output'], sort_keys=True)
-    #print("comparison of output with expected_output:")
-    #print(output)
-    #print(expected_output)
+    expected_result = json.dumps(expected_output[u'output'], sort_keys=True)
     assert (output == expected_result)
     sys.stdout.write('...OK\n')
     sys.stdout.flush()
