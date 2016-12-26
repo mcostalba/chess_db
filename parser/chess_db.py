@@ -48,11 +48,11 @@ class Parser:
         db = self.p.before.split('Book file: ')[1]
         return db.split()[0]
 
-    def find(self, fen, max_offsets=10):
+    def find(self, fen, limit=10, skip=0):
         '''Find all games with positions equal to fen'''
         if not self.db or not self.p:
             raise NameError("Unknown DB, first open a PGN file")
-        cmd = "find {} max_game_offsets {} {}".format(self.db, max_offsets, fen)
+        cmd = "find {} limit {} skip {} {}".format(self.db, limit, skip, fen)
         self.p.sendline(cmd)
         self.p.expect(FIND_OUTPUT_REGEX)
         result = self.p.before + "}"
