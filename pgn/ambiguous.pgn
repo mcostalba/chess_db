@@ -1,3 +1,17 @@
+[Event "Helyi esem�ny"]
+[Site "Helyben"]
+[Date "2015.11.06"]
+[Round "1"]
+[White "tamas"]
+[Black "Vend�g"]
+[Result "1/2-1/2"]
+[Time "12:05:00"]
+[SetUp "1"]
+[FEN "4k3/8/8/8/8/8/8/4K3 b KQkq - 7 13"]
+[PlyCount "0"]
+
+ 1/2-1/2
+
 [Event "?"]
 [White "Spassky"]
 [Black "Petrosian"]
@@ -147,7 +161,7 @@ g3h5 g1f2 h5f6 f2e3 g5f5 f7c4 e5e4 c4b3 f6g4 e3e2 f5f4 b3c2 e4e3 e2f1 tb=31443/5
 e3c4 d2e2 c4b2 b3c2 e4e3 c2b3 b2d3 b3c2 d3f4 e2d1 tb=14100/212997) 3.41/23
 01:25.500}  49.Bb3{00:32.875}  Kd4{(e5d4 b3c2 d5e3 c2b3 e3c4 d2e2 c4b2
 b3c2 tb=30403/361794) 3.41/24 01:15.188}  50.Bd1{00:47.812}  e3{(e4e3 d2e1
-d4d3 d1g4 d3e4 tb=21892/263876) 3.63/24 01:34.687}  51.Ke1{02:43.969} 
+d4d3 d1g4 d3e4 tb=21892/263876) 3.63/24 01:34.687}  51.Ke1{02:43.969}
 Nf4{(d5f4 d1g4 d4c3 tb=85865/1117783) 3.88/24 02:13.937}  52.Bc2{01:47.922}
  Kc3{(d4c3 c2e4 c3b3 e4b7 b3c2 b7c8 c2d3 c8f5 d3c4 f5d7 c4b4 tb=67090/749863)
 3.97/25 05:16.907}  53.Be4{00:20.468}  Kb3{(c3b3 e4b7 b3a4 tb=32182/425409)

@@ -10,7 +10,7 @@ from subprocess import STDOUT, check_output as qx
 from chess_db import Parser
 
 DB = {'GM_games'               : {'games':  20, 'moves':  1519, 'fixed':   0},
-      'ambiguous'              : {'games':   3, 'moves':   194, 'fixed':   2},
+      'ambiguous'              : {'games':   4, 'moves':   194, 'fixed':   2},
       'bali02'                 : {'games':  16, 'moves':  1485, 'fixed':   0},
       'chessdoctor'            : {'games':  55, 'moves':  4648, 'fixed': 249},
       'd00_chess_informant'    : {'games': 103, 'moves':  7019, 'fixed':   0},
