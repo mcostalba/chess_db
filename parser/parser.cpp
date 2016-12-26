@@ -82,7 +82,7 @@ Token ToToken[256];
 Step ToStep[STATE_NB][TOKEN_NB];
 Position RootPos;
 
-void map(const char* fname, void** baseAddress, uint64_t* mapping, size_t* size) {
+void map(const char* fname, void** baseAddress, uint64_t* mapping, uint64_t* size) {
 
 #ifndef _WIN32
     struct stat statbuf;
