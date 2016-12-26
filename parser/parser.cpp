@@ -758,7 +758,7 @@ void make_book(std::istringstream& is) {
 
 
 void probe_key(std::vector<std::string>& json_moves, const std::string& fName,
-               size_t ofs, size_t maxGameOffsets) {
+               size_t ofs, size_t limit, size_t skip) {
 
     std::ifstream ifs(fName.c_str(), std::ifstream::in | std::ifstream::binary);
 
@@ -771,18 +771,22 @@ void probe_key(std::vector<std::string>& json_moves, const std::string& fName,
     read_entry(e, ifs);
     Key key = e.key;
     std::vector<uint64_t> pgn_ofs;
-    pgn_ofs.reserve(maxGameOffsets);
+    pgn_ofs.reserve(limit);
 
     do {
         PMove move = e.move;
         std::string str("\"move\": \"" + UCI::move(Move(e.move), false) + "\", \"weight\": ");
         str += std::to_string(e.weight);
         uint64_t results[4] = {};
+        size_t skip_counter = skip;
 
         do {
-            if (pgn_ofs.size() < maxGameOffsets)
-                pgn_ofs.push_back((e.learn & 0x3FFFFFFF) << 3);
-
+            
+            if (pgn_ofs.size() < limit && skip_counter == 0) {
+                    pgn_ofs.push_back((e.learn & 0x3FFFFFFF) << 3);
+            }
+            if (skip_counter > 0)
+                --skip_counter;
             results[(e.learn >> 30) & 3]++;
             read_entry(e, ifs);
         }
@@ -820,7 +824,7 @@ void find(std::istringstream& is) {
 
     PolyglotBook book;
     std::string bookName, token, fenStr;
-    size_t maxGameOffsets = 10;
+    size_t limit = 10, skip = 0;
     is >> bookName;
 
     if (bookName.empty())
@@ -830,15 +834,21 @@ void find(std::istringstream& is) {
     }
 
     while (is >> token)
-        if ("max_game_offsets" == token)
+        if ("limit" == token)
         {
             is >> token;
-            maxGameOffsets = (size_t)std::stoi(token);
-            if (maxGameOffsets > 3000 || maxGameOffsets < 1)
+            limit = (size_t)std::stoi(token);
+            if (limit > 3000 || limit < 1)
             {
-                std::cerr << "maxGameOffsets must be between 1 and 3000" << std::endl;
+                std::cerr << "limit must be between 1 and 3000" << std::endl;
                 exit(0);
             }
+        }
+        else if("skip" == token)
+        {
+            is >> token;
+            // There is no need to validate the bounds of skip as once can be skipping a lot of games in a large DB
+            skip = (size_t)std::stoi(token);
         }
         else
             fenStr += token + " ";
@@ -855,7 +865,7 @@ void find(std::istringstream& is) {
     size_t ofs = book.probe(RootPos.key(), bookName, &found);
     std::vector<std::string> json_moves;
     if (found)
-        probe_key(json_moves, bookName, ofs, maxGameOffsets);
+        probe_key(json_moves, bookName, ofs, limit, skip);
 
     // Output probing info in JSON format
     std::string tab = "\n    ";
