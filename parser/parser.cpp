@@ -714,12 +714,6 @@ void make_book(std::istringstream& is) {
 
     unmap(baseAddress, mapping);
 
-    if (!stats.games)
-    {
-        std::cerr << "done\nNo valid games found!";
-        return;
-    }
-
     std::cerr << "done\nSorting...";
 
     std::sort(kTable.begin(), kTable.end());
@@ -747,7 +741,7 @@ void make_book(std::istringstream& is) {
               << "\nGames: " << stats.games
               << "\nMoves: " << stats.moves
               << "\nIncorrect moves: " << stats.fixed
-              << "\nUnique positions: " << 100 * uniqueKeys / stats.moves << "%"
+              << "\nUnique positions: " << (stats.moves ? 100 * uniqueKeys / stats.moves : 0) << "%"
               << "\nGames/second: " << 1000 * stats.games / elapsed
               << "\nMoves/second: " << 1000 * stats.moves / elapsed
               << "\nMBytes/second: " << float(size) / elapsed / 1000
@@ -781,12 +775,12 @@ void probe_key(std::vector<std::string>& json_moves, const std::string& fName,
         size_t skip_counter = skip;
 
         do {
-            
-            if (pgn_ofs.size() < limit && skip_counter == 0) {
-                    pgn_ofs.push_back((e.learn & 0x3FFFFFFF) << 3);
-            }
-            if (skip_counter > 0)
+            if (!skip_counter && pgn_ofs.size() < limit)
+                pgn_ofs.push_back((e.learn & 0x3FFFFFFF) << 3);
+
+            if (skip_counter)
                 --skip_counter;
+
             results[(e.learn >> 30) & 3]++;
             read_entry(e, ifs);
         }
@@ -834,21 +828,24 @@ void find(std::istringstream& is) {
     }
 
     while (is >> token)
-        if ("limit" == token)
+        if (token == "limit")
         {
             is >> token;
-            limit = (size_t)std::stoi(token);
+            std::stringstream to_size_t(token);
+            to_size_t >> limit;
             if (limit > 3000 || limit < 1)
             {
                 std::cerr << "limit must be between 1 and 3000" << std::endl;
                 exit(0);
             }
         }
-        else if("skip" == token)
+        else if (token == "skip")
         {
             is >> token;
-            // There is no need to validate the bounds of skip as once can be skipping a lot of games in a large DB
-            skip = (size_t)std::stoi(token);
+            // There is no need to validate the bounds of skip as once can be
+            // skipping a lot of games in a large DB.
+            std::stringstream to_size_t(token);
+            to_size_t >> skip;
         }
         else
             fenStr += token + " ";
