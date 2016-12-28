@@ -41,7 +41,7 @@ DB = {'GM_games'               : {'games':  20, 'moves':  1519, 'fixed':   0},
 FIND_TEST = {
     'romero.bin' : {
         "input": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-                   u'output':
+                  'output':
                        {
                            "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
                            "key": 5060803636482931868,
@@ -57,56 +57,17 @@ FIND_TEST = {
 
     },
     'hayes.bin' : {
-        "input": "limit 1 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "input": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "input_2": {"type": "skiplimit", "cmd": "limit 2 skip 1 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"},
         'output':
-        {
-            "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-            "key": 5060803636482931868,
-            "moves": [
-               {
-                    "move": "e2e4", "weight": 36408, "games": 5, "wins": 1, "losses": 4, "draws": 0, "pgn offsets": [8304]
-               },
-               {
-                    "move": "d2d4", "weight": 29126, "games": 4, "wins": 1, "losses": 3, "draws": 0, "pgn offsets": [11576]
-               }
-            ]
-        }
+            {"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "key": 5060803636482931868, "moves": [
+                {"draws": 0, "games": 5, "losses": 4, "move": "e2e4", "pgn offsets": [0, 2808, 5464, 8304, 16480],
+                 "weight": 36408, "wins": 1},
+                {"draws": 0, "games": 4, "losses": 3, "move": "d2d4", "pgn offsets": [14368, 17736, 1512, 11576],
+                 "weight": 29126, "wins": 1}]
+             }
     },
 
-    'famous_games.bin' : {
-        "input": "limit 2 skip 1 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        'output':
-        {
-            "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-            "key": 5060803636482931868,
-            "moves": [
-               {
-                    "move": "e2e4", "weight": 30015, "games": 229, "wins": 150, "losses": 71, "draws": 8, "pgn offsets": [802736, 507472]
-               },
-               {
-                    "move": "d2d4", "weight": 23985, "games": 183, "wins": 109, "losses": 67, "draws": 6, "pgn offsets": [682776, 784832]
-               },
-               {
-                    "move": "c2c4", "weight": 6160, "games": 47, "wins": 33, "losses": 12, "draws": 2, "pgn offsets": [427400, 577512]
-               },
-               {
-                    "move": "g1f3", "weight": 4587, "games": 35, "wins": 18, "losses": 17, "draws": 0, "pgn offsets": [424472, 471752]
-               },
-               {
-                    "move": "f2f4", "weight": 393, "games": 3, "wins": 1, "losses": 2, "draws": 0, "pgn offsets": [88040, 68152]
-               },
-               {
-                    "move": "g2g3", "weight": 131, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": []
-               },
-               {
-                    "move": "b2b4", "weight": 131, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": []
-               },
-               {
-                    "move": "b2b3", "weight": 131, "games": 1, "wins": 0, "losses": 1, "draws": 0, "pgn offsets": []
-               }
-            ]
-        }
-    }
 }
 
 def signature(matches):
@@ -149,10 +110,29 @@ def run_find_test(fname, expected_output):
     sys.stdout.write('Processing ' + fname + ' for find test')
     output = qx(["./parser", 'find', fname, expected_output['input']], stderr=STDOUT)
 
+    json_output = json.loads(output)
+    for m in json_output["moves"]:
+        m["pgn offsets"].sort()
 
-    output = json.dumps(json.loads(output), sort_keys=True)
-    expected_result = json.dumps(expected_output[u'output'], sort_keys=True)
-    assert (output == expected_result)
+    sorted_output = json.dumps(json_output, sort_keys=True)
+
+    expected_output_dict = expected_output[u'output']
+    for m in expected_output_dict["moves"]:
+        m["pgn offsets"].sort()
+
+    expected_result = json.dumps(expected_output_dict, sort_keys=True)
+
+    assert (sorted_output == expected_result)
+
+    if 'input_2' in expected_output and 'type' in expected_output['input_2'] \
+            and expected_output['input_2']['type'] == 'skiplimit':
+        output_2 = qx(["./parser", 'find', fname, expected_output['input_2']['cmd']], stderr=STDOUT)
+        json_output_2 = json.loads(output_2)
+        json_output = json.loads(output)
+
+        for i, m in enumerate(json_output["moves"]):
+            assert(set(json_output_2["moves"][i]["pgn offsets"]) < set(m["pgn offsets"]))
+
     sys.stdout.write('...OK\n')
     sys.stdout.flush()
 
