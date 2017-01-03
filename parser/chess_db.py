@@ -19,7 +19,7 @@ class Parser:
 
     def wait_ready(self):
         self.p.sendline('isready')
-        self.p.expect('readyok')
+        self.p.expect(u'readyok')
 
     def open(self, pgn, full=True):
         '''Open a PGN file and create an index if not exsisting'''
