@@ -70,11 +70,6 @@ FIND_TEST = {
 
 }
 
-def signature(matches):
-    d = str(matches)
-    sha = hashlib.sha1(d).hexdigest()
-    return sha[:7]
-
 def check_result(output, fname, stats):
     fname = os.path.splitext(fname)[0]
     games = output.split('Games: ')

@@ -7,8 +7,6 @@ import re
 from pexpect.popen_spawn import PopenSpawn
 
 PGN_HEADERS_REGEX = re.compile(r"\[([A-Za-z0-9_]+)\s+\"(.*)\"\]")
-FIND_OUTPUT_REGEX = re.compile(r"}$")
-BOOK_MAKE_DONE_REGEX = re.compile(r"Processing time \(ms\):[^$]+$")
 
 
 class Parser:
@@ -18,6 +16,10 @@ class Parser:
         self.p = PopenSpawn(engine, encoding="utf-8")
         self.pgn = ''
         self.db = ''
+
+    def wait_ready(self):
+        self.p.sendline('isready')
+        self.p.expect('readyok')
 
     def open(self, pgn, full=True):
         '''Open a PGN file and create an index if not exsisting'''
@@ -44,20 +46,20 @@ class Parser:
         if full:
             cmd += ' full'
         self.p.sendline(cmd)
-        self.p.expect(BOOK_MAKE_DONE_REGEX)
+        self.wait_ready()
         db = self.p.before.split('Book file: ')[1]
         return db.split()[0]
 
     def find(self, fen, limit=10, skip=0):
         '''Find all games with positions equal to fen'''
-        if not self.db or not self.p:
+        if not self.db:
             raise NameError("Unknown DB, first open a PGN file")
         cmd = "find {} limit {} skip {} {}".format(self.db, limit, skip, fen)
         self.p.sendline(cmd)
-        self.p.expect(FIND_OUTPUT_REGEX)
-        result = self.p.before + "}"
+        self.wait_ready()
+        result = json.loads(self.p.before)
         self.p.before = ''
-        return json.loads(result)
+        return result
 
     def get_games(self, list):
         '''Retrieve the PGN games specified in the offset list'''

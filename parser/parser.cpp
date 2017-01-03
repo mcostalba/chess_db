@@ -704,7 +704,7 @@ void make_book(std::istringstream& is) {
     // the pgn file.
     kTable.reserve(2 * size / sizeof(PolyEntry));
 
-    std::cerr << "\nProcessing...";
+    std::cout << "\nProcessing...";
 
     TimePoint elapsed = now();
 
@@ -714,7 +714,7 @@ void make_book(std::istringstream& is) {
 
     unmap(baseAddress, mapping);
 
-    std::cerr << "done\nSorting...";
+    std::cout << "done\nSorting...";
 
     std::sort(kTable.begin(), kTable.end());
 
@@ -729,7 +729,7 @@ void make_book(std::istringstream& is) {
             uniqueKeys++;
         }
 
-    std::cerr << "done\nWriting Polygot book...";
+    std::cout << "done\nWriting Polygot book...";
 
     size_t lastdot = bookName.find_last_of(".");
     if (lastdot != std::string::npos)
@@ -737,7 +737,7 @@ void make_book(std::istringstream& is) {
     bookName += ".bin";
     size_t bookSize = write_poly_file(kTable, bookName, full);
 
-    std::cerr << "done\n"
+    std::cout << "done\n"
               << "\nGames: " << stats.games
               << "\nMoves: " << stats.moves
               << "\nIncorrect moves: " << stats.fixed
@@ -823,7 +823,7 @@ void find(std::istringstream& is) {
 
     if (bookName.empty())
     {
-        std::cerr << "Missing PGN file name..." << std::endl;
+        std::cout << "Missing PGN file name..." << std::endl;
         exit(0);
     }
 
@@ -835,7 +835,7 @@ void find(std::istringstream& is) {
             to_size_t >> limit;
             if (limit > 3000 || limit < 1)
             {
-                std::cerr << "limit must be between 1 and 3000" << std::endl;
+                std::cout << "limit must be between 1 and 3000" << std::endl;
                 exit(0);
             }
         }
@@ -852,7 +852,7 @@ void find(std::istringstream& is) {
 
     if (fenStr.empty())
     {
-        std::cerr << "Missing FEN string..." << std::endl;
+        std::cout << "Missing FEN string..." << std::endl;
         exit(0);
     }
 
@@ -881,7 +881,7 @@ void find(std::istringstream& is) {
     }
 
     json << tab << "]\n}";
-    std::cerr << json.str() << std::endl;
+    std::cout << json.str() << std::endl;
 }
 
 }

@@ -107,10 +107,11 @@ void UCI::loop(int argc, char* argv[]) {
       is >> skipws >> token;
 
       if (token == "quit") {}
-      else if (token == "position")   position(pos, is);
-      else if (token == "d")     std::cerr << pos << std::endl;
-      else if (token == "book")  Parser::make_book(is);
-      else if (token == "find")  Parser::find(is);
+      else if (token == "position") position(pos, is);
+      else if (token == "d")        std::cerr << pos << std::endl;
+      else if (token == "book")     Parser::make_book(is);
+      else if (token == "find")     Parser::find(is);
+      else if (token == "isready")  std::cout << "readyok" << std::endl;
       else
           std::cerr << "Unknown command: " << cmd << std::endl;
 
