@@ -9,6 +9,8 @@ import sys
 from subprocess import STDOUT, check_output as qx
 from chess_db import Parser
 
+PARSER = './parser.exe' if 'nt' in os.name else './parser'
+
 DB = {'GM_games'               : {'games':  20, 'moves':  1519, 'fixed':   0},
       'ambiguous'              : {'games':   4, 'moves':   194, 'fixed':   2},
       'bali02'                 : {'games':  16, 'moves':  1485, 'fixed':   0},
@@ -41,33 +43,37 @@ DB = {'GM_games'               : {'games':  20, 'moves':  1519, 'fixed':   0},
 FIND_TEST = {
     'romero.bin' : {
         "input": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-                  'output':
-                       {
-                           "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-                           "key": 5060803636482931868,
-                           "moves": [
-                              {
-                                   "move": "e2e4", "weight": 49151, "games": 3, "wins": 1, "losses": 2, "draws": 0, "pgn offsets": [0, 5176, 3656]
-                              },
-                              {
-                                   "move": "d2d4", "weight": 16383, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": [1688]
-                              }
-                           ]
+        "output":
+                   {
+                       "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                       "key": 5060803636482931868,
+                       "moves": [
+                        {
+                            "move": "e2e4", "weight": 49151, "games": 3, "wins": 1, "losses": 2, "draws": 0, "pgn offsets": [0, 5176, 3656]
+                        },
+                        {
+                            "move": "d2d4", "weight": 16383, "games": 1, "wins": 1, "losses": 0, "draws": 0, "pgn offsets": [1688]
+                        }
+                        ]
                        }
 
     },
     'hayes.bin' : {
         "input": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        "input_2": {"type": "skiplimit", "cmd": "limit 2 skip 1 rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"},
-        'output':
-            {"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "key": 5060803636482931868, "moves": [
-                {"draws": 0, "games": 5, "losses": 4, "move": "e2e4", "pgn offsets": [0, 2808, 5464, 8304, 16480],
-                 "weight": 36408, "wins": 1},
-                {"draws": 0, "games": 4, "losses": 3, "move": "d2d4", "pgn offsets": [14368, 17736, 1512, 11576],
-                 "weight": 29126, "wins": 1}]
+        "output":
+            {
+                "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+                "key": 5060803636482931868,
+                "moves": [
+                {
+                    "move": "e2e4", "weight": 36408, "games": 5, "wins": 1, "losses": 4, "draws": 0, "pgn offsets": [0, 2808, 5464, 8304, 16480]
+                },
+                {
+                    "move": "d2d4", "weight": 29126, "games": 4, "wins": 1, "losses": 3, "draws": 0, "pgn offsets": [14368, 17736, 1512, 11576]
+                }
+                ]
              }
-    },
-
+    }
 }
 
 
@@ -89,44 +95,30 @@ def run_file(p, file, stats):
     ok1 = DB[fname]['games'] == games
     ok2 = DB[fname]['moves'] == moves
     ok3 = DB[fname]['fixed'] == fixed
-    return 'OK' if ok1 and ok2 and ok3 else 'FAIL'
+    print('OK' if ok1 and ok2 and ok3 else 'FAIL')
 
 
-def run_find_test(fname, expected_output):
-    sys.stdout.write('Processing ' + fname + ' for find test')
-    output = qx(["./parser", 'find', fname, expected_output['input']], stderr=STDOUT)
+def run_find_test(p, file, test):
+    fname = os.path.basename(file)
+    fname = os.path.splitext(fname)[0]
+    sys.stdout.write('Processing ' + fname + ' for find test...')
+    p.open(file)
+    result = p.find(test['input'])
+    for m in result['moves']:
+        m['pgn offsets'].sort()
+    sorted_output = json.dumps(result, sort_keys=True)
 
-    json_output = json.loads(output)
-    for m in json_output["moves"]:
-        m["pgn offsets"].sort()
-
-    sorted_output = json.dumps(json_output, sort_keys=True)
-
-    expected_output_dict = expected_output[u'output']
-    for m in expected_output_dict["moves"]:
-        m["pgn offsets"].sort()
-
-    expected_result = json.dumps(expected_output_dict, sort_keys=True)
-
-    assert (sorted_output == expected_result)
-
-    if 'input_2' in expected_output and 'type' in expected_output['input_2'] \
-            and expected_output['input_2']['type'] == 'skiplimit':
-        output_2 = qx(["./parser", 'find', fname, expected_output['input_2']['cmd']], stderr=STDOUT)
-        json_output_2 = json.loads(output_2)
-        json_output = json.loads(output)
-
-        for i, m in enumerate(json_output["moves"]):
-            assert(set(json_output_2["moves"][i]["pgn offsets"]) < set(m["pgn offsets"]))
-
-    sys.stdout.write('...OK\n')
-    sys.stdout.flush()
+    expected_output = test['output']
+    for m in expected_output['moves']:
+        m['pgn offsets'].sort()
+    expected_result = json.dumps(expected_output, sort_keys=True)
+    print('OK' if sorted_output == expected_result else 'FAIL')
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run test on pgn files')
     parser.add_argument('--dir', default='../pgn/')
-    parser.add_argument('--path', default='./parser')
+    parser.add_argument('--path', default=PARSER)
     args = parser.parse_args()
 
     if not os.path.isfile(args.path):
@@ -141,11 +133,10 @@ if __name__ == "__main__":
     stats = {'games': 0, 'moves': 0, 'fixed': 0}
     files = sorted(glob.glob(args.dir + '/*.pgn'))
     for fn in files:
-        result = run_file(p, fn, stats)
-        print(result)
+        run_file(p, fn, stats)
 
-    for k, v in FIND_TEST.items():
-        run_find_test(args.dir+k, v)
+    for fname, item in FIND_TEST.items():
+        run_find_test(p, args.dir + fname, item)
 
     print("\ngames {}, moves {}, fixed {}\n"
           .format(stats['games'], stats['moves'], stats['fixed']))
