@@ -704,7 +704,7 @@ void make_book(std::istringstream& is) {
     // the pgn file.
     kTable.reserve(2 * size / sizeof(PolyEntry));
 
-    std::cout << "\nProcessing...";
+    std::cerr << "\nProcessing...";
 
     TimePoint elapsed = now();
 
@@ -714,7 +714,7 @@ void make_book(std::istringstream& is) {
 
     unmap(baseAddress, mapping);
 
-    std::cout << "done\nSorting...";
+    std::cerr << "done\nSorting...";
 
     std::sort(kTable.begin(), kTable.end());
 
@@ -729,7 +729,7 @@ void make_book(std::istringstream& is) {
             uniqueKeys++;
         }
 
-    std::cout << "done\nWriting Polygot book...";
+    std::cerr << "done\nWriting Polygot book...";
 
     size_t lastdot = bookName.find_last_of(".");
     if (lastdot != std::string::npos)
@@ -737,17 +737,25 @@ void make_book(std::istringstream& is) {
     bookName += ".bin";
     size_t bookSize = write_poly_file(kTable, bookName, full);
 
-    std::cout << "done\n"
-              << "\nGames: " << stats.games
-              << "\nMoves: " << stats.moves
-              << "\nIncorrect moves: " << stats.fixed
-              << "\nUnique positions: " << (stats.moves ? 100 * uniqueKeys / stats.moves : 0) << "%"
-              << "\nGames/second: " << 1000 * stats.games / elapsed
-              << "\nMoves/second: " << 1000 * stats.moves / elapsed
-              << "\nMBytes/second: " << float(size) / elapsed / 1000
-              << "\nSize of index file (bytes): " << bookSize
-              << "\nBook file: " << bookName
-              << "\nProcessing time (ms): " << elapsed << "\n" << std::endl;
+    std::cerr << "done\n" << std::endl;
+
+    // Output probing info in JSON format
+    std::string tab = "\n    ";
+    std::stringstream json;
+    json << "{"
+         << tab << "\"Games\": " << stats.games << ","
+         << tab << "\"Moves\": " << stats.moves << ","
+         << tab << "\"Incorrect moves\": " << stats.fixed << ","
+         << tab << "\"Unique positions (%)\": " << (stats.moves ? 100 * uniqueKeys / stats.moves : 0) << ","
+         << tab << "\"Games/second\": " << 1000 * stats.games / elapsed << ","
+         << tab << "\"Moves/second\": " << 1000 * stats.moves / elapsed << ","
+         << tab << "\"MBytes/second\": " << float(size) / elapsed / 1000 << ","
+         << tab << "\"Size of index file (bytes)\": " << bookSize << ","
+         << tab << "\"Book file\": \"" << bookName << "\","
+         << tab << "\"Processing time (ms)\": " << elapsed << "\n"
+         << "}";
+
+    std::cout << json.str() << std::endl;
 }
 
 
@@ -823,7 +831,7 @@ void find(std::istringstream& is) {
 
     if (bookName.empty())
     {
-        std::cout << "Missing PGN file name..." << std::endl;
+        std::cerr << "Missing PGN file name..." << std::endl;
         exit(0);
     }
 
@@ -835,7 +843,7 @@ void find(std::istringstream& is) {
             to_size_t >> limit;
             if (limit > 3000 || limit < 1)
             {
-                std::cout << "limit must be between 1 and 3000" << std::endl;
+                std::cerr << "limit must be between 1 and 3000" << std::endl;
                 exit(0);
             }
         }
@@ -852,7 +860,7 @@ void find(std::istringstream& is) {
 
     if (fenStr.empty())
     {
-        std::cout << "Missing FEN string..." << std::endl;
+        std::cerr << "Missing FEN string..." << std::endl;
         exit(0);
     }
 

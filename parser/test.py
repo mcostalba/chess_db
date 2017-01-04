@@ -70,35 +70,26 @@ FIND_TEST = {
 
 }
 
-def check_result(output, fname, stats):
-    fname = os.path.splitext(fname)[0]
-    games = output.split('Games: ')
-    moves = output.split('Moves: ')
-    fixed = output.split('Incorrect moves: ')
-    if len(games) != 2 or len(moves) != 2 or len(fixed) != 2:
-        return 'ERROR\n' + output
-    elif fname not in DB:
-        return 'done'
-    else:
-        games = int(games[1].split('\n')[0])
-        moves = int(moves[1].split('\n')[0])
-        fixed = int(fixed[1].split('\n')[0])
-        stats['games'] += games
-        stats['moves'] += moves
-        stats['fixed'] += fixed
-        ok1 = DB[fname]['games'] == games
-        ok2 = DB[fname]['moves'] == moves
-        ok3 = DB[fname]['fixed'] == fixed
-        return 'OK' if ok1 and ok2 and ok3 else 'FAIL'
 
-
-def run_file(file, stats):
+def run_file(p, file, stats):
     fname = os.path.basename(file)
+    fname = os.path.splitext(fname)[0]
     sys.stdout.write('Processing ' + fname + '...')
     sys.stdout.flush()
-    output = qx(["./parser", 'book', file, 'full'], stderr=STDOUT)
-    result = check_result(output, fname, stats)
-    print(result)
+    p.open(file)
+    result = p.make(True)  # Force rebuilding of DB index
+    if fname not in DB:
+        return 'done'
+    games = result['Games']
+    moves = result['Moves']
+    fixed = result['Incorrect moves']
+    stats['games'] += games
+    stats['moves'] += moves
+    stats['fixed'] += fixed
+    ok1 = DB[fname]['games'] == games
+    ok2 = DB[fname]['moves'] == moves
+    ok3 = DB[fname]['fixed'] == fixed
+    return 'OK' if ok1 and ok2 and ok3 else 'FAIL'
 
 
 def run_find_test(fname, expected_output):
@@ -135,19 +126,28 @@ def run_find_test(fname, expected_output):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run test on pgn files')
     parser.add_argument('--dir', default='../pgn/')
+    parser.add_argument('--path', default='./parser')
     args = parser.parse_args()
+
+    if not os.path.isfile(args.path):
+        print("File {} does not exsist".format(args.path))
+        sys.exit(0)
 
     if not os.path.isdir(args.dir):
         print("Directory {} does not exsist".format(args.dir))
         sys.exit(0)
 
+    p = Parser(args.path)
     stats = {'games': 0, 'moves': 0, 'fixed': 0}
     files = sorted(glob.glob(args.dir + '/*.pgn'))
     for fn in files:
-        run_file(fn, stats)
+        result = run_file(p, fn, stats)
+        print(result)
 
     for k, v in FIND_TEST.items():
         run_find_test(args.dir+k, v)
 
     print("\ngames {}, moves {}, fixed {}\n"
           .format(stats['games'], stats['moves'], stats['fixed']))
+
+    p.close()

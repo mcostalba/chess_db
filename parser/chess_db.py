@@ -25,10 +25,12 @@ class Parser:
         '''Open a PGN file and create an index if not exsisting'''
         if not os.path.isfile(pgn):
             raise NameError("File {} does not exsist".format(pgn))
+        pgn = os.path.normcase(pgn)
         self.pgn = pgn
         self.db = os.path.splitext(pgn)[0] + '.bin'
         if not os.path.isfile(self.db):
-            self.db = self.make(full)
+            result = self.make(full)
+            self.db = result['Book file']
 
     def close(self):
         '''Terminate chess_db. Not really needed: engine will terminate as
@@ -47,8 +49,11 @@ class Parser:
             cmd += ' full'
         self.p.sendline(cmd)
         self.wait_ready()
-        db = self.p.before.split('Book file: ')[1]
-        return db.split()[0]
+        s = '{' + self.p.before.split('{')[1]
+        s = s.replace('\\', r'\\')  # Escape Windows's path delimiter
+        result = json.loads(s)
+        self.p.before = ''
+        return result
 
     def find(self, fen, limit=10, skip=0):
         '''Find all games with positions equal to fen'''
